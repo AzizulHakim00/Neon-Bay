@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#080b19" />
+    <meta name="description" content="Neon Bay — an original browser-based open-city action game." />
+    <link rel="icon" href="./favicon.svg" />
+    <title>Neon Bay</title>
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game-canvas" aria-label="Neon Bay game canvas"></canvas>
+
+      <div id="loading-screen" class="screen active">
+        <div class="loading-card">
+          <div class="eyebrow">ORIGINAL WEB GAME</div>
+          <h1>NEON <span>BAY</span></h1>
+          <p>Building the city…</p>
+          <div class="loader"><i></i></div>
+        </div>
+      </div>
+
+      <div id="main-menu" class="screen">
+        <div class="menu-backdrop"></div>
+        <div class="menu-panel">
+          <div class="eyebrow">WELCOME TO</div>
+          <h1>NEON <span>BAY</span></h1>
+          <p class="tagline">One city. Five jobs. Too many sirens.</p>
+          <div class="menu-actions">
+            <button id="continue-btn" class="primary">Continue Chapter</button>
+            <button id="new-game-btn">New Game</button>
+            <button id="how-btn">How to Play</button>
+            <button id="settings-btn">Settings</button>
+          </div>
+          <p class="legal">Original characters, city, missions and procedural artwork. Desktop recommended.</p>
+        </div>
+        <div class="menu-city-label">COASTLINE DISTRICT · 1996</div>
+      </div>
+
+      <div id="how-panel" class="modal hidden">
+        <div class="modal-card">
+          <button class="close-modal" aria-label="Close">×</button>
+          <div class="eyebrow">FIELD MANUAL</div>
+          <h2>How to Play</h2>
+          <div class="control-grid">
+            <div><kbd>W A S D</kbd><span>Move / drive</span></div>
+            <div><kbd>Mouse</kbd><span>Look / aim</span></div>
+            <div><kbd>Shift</kbd><span>Sprint / boost</span></div>
+            <div><kbd>Space</kbd><span>Jump / handbrake</span></div>
+            <div><kbd>E</kbd><span>Interact / enter vehicle</span></div>
+            <div><kbd>Click</kbd><span>Fire weapon</span></div>
+            <div><kbd>R</kbd><span>Reload</span></div>
+            <div><kbd>Esc</kbd><span>Pause</span></div>
+          </div>
+          <p>Follow the colored mission marker. Shops and services use their own icons on the minimap.</p>
+        </div>
+      </div>
+
+      <div id="settings-panel" class="modal hidden">
+        <div class="modal-card">
+          <button class="close-modal" aria-label="Close">×</button>
+          <div class="eyebrow">DISPLAY & AUDIO</div>
+          <h2>Settings</h2>
+          <label class="setting-row"><span>Graphics quality</span><select id="quality-select"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label class="setting-row"><span>Music</span><input id="music-toggle" type="checkbox" checked /></label>
+          <label class="setting-row"><span>Sound effects</span><input id="sfx-toggle" type="checkbox" checked /></label>
+          <label class="setting-row"><span>Camera sensitivity</span><input id="sensitivity" type="range" min="0.4" max="2" step="0.1" value="1" /></label>
+        </div>
+      </div>
+
+      <div id="hud" class="hidden">
+        <div class="top-left hud-stack">
+          <div class="player-bars hud-card">
+            <div class="bar-row"><span>HEALTH</span><div class="bar"><i id="health-bar"></i></div><b id="health-text">100</b></div>
+            <div class="bar-row"><span>ARMOR</span><div class="bar armor"><i id="armor-bar"></i></div><b id="armor-text">25</b></div>
+            <div class="bar-row"><span>STAMINA</span><div class="bar stamina"><i id="stamina-bar"></i></div><b id="stamina-text">100</b></div>
+          </div>
+          <div id="weapon-card" class="weapon-card hud-card">
+            <span id="weapon-name">9MM PISTOL</span>
+            <strong><b id="ammo-current">12</b><small>/</small><b id="ammo-reserve">72</b></strong>
+          </div>
+        </div>
+
+        <div class="top-right hud-stack align-right">
+          <div class="cash-card hud-card">$<span id="cash-text">500</span></div>
+          <div class="world-card hud-card"><span id="clock-text">18:20</span><span id="weather-text">CLEAR</span></div>
+          <div id="wanted" class="wanted" aria-label="Wanted level">☆ ☆ ☆ ☆ ☆</div>
+        </div>
+
+        <div id="mission-card" class="mission-card hud-card">
+          <div class="mission-number" id="mission-number">JOB 01</div>
+          <h2 id="mission-title">First Ride</h2>
+          <p id="mission-objective">Go to the apartment courtyard.</p>
+          <div class="objective-progress"><i id="objective-progress"></i></div>
+        </div>
+
+        <div id="interaction" class="interaction hidden"><kbd>E</kbd><span id="interaction-text">Interact</span></div>
+        <div id="notification" class="notification hidden"></div>
+        <div id="crosshair" class="crosshair hidden"><i></i><i></i></div>
+        <canvas id="minimap" width="220" height="220"></canvas>
+        <div id="speedometer" class="speedometer hidden"><strong id="speed-text">0</strong><span>KM/H</span></div>
+      </div>
+
+      <div id="pause-menu" class="screen pause-screen">
+        <div class="pause-card">
+          <div class="eyebrow">GAME PAUSED</div>
+          <h2>Coastline District</h2>
+          <button id="resume-btn" class="primary">Resume</button>
+          <button id="save-btn">Save Game</button>
+          <button id="restart-mission-btn">Restart Mission</button>
+          <button id="quit-btn">Main Menu</button>
+        </div>
+      </div>
+
+      <div id="mission-complete" class="screen result-screen">
+        <div class="result-card">
+          <div class="eyebrow">MISSION PASSED</div>
+          <h2 id="complete-title">First Ride</h2>
+          <p id="complete-summary">Clean delivery.</p>
+          <strong id="complete-reward">+$750</strong>
+          <button id="next-mission-btn" class="primary">Continue</button>
+        </div>
+      </div>
+
+      <div id="game-over" class="screen result-screen danger">
+        <div class="result-card">
+          <div class="eyebrow">WASTED</div>
+          <h2>The bay keeps moving.</h2>
+          <p>You lost some cash, but the mission can be retried.</p>
+          <button id="retry-btn" class="primary">Retry Mission</button>
+          <button id="gameover-menu-btn">Main Menu</button>
+        </div>
+      </div>
+
+      <div id="mobile-controls" class="hidden">
+        <div id="joystick" class="joystick"><i id="joystick-knob"></i></div>
+        <div class="mobile-buttons">
+          <button data-action="fire">FIRE</button>
+          <button data-action="jump">JUMP</button>
+          <button data-action="interact">USE</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
