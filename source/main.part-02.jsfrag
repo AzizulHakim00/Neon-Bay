@@ -1,0 +1,170 @@
+    const target = this.path[this.pathIndex];
+    const toTarget = tmpV.copy(target).sub(this.mesh.position);
+    if (toTarget.length() < 3) this.pathIndex = (this.pathIndex + 1) % this.path.length;
+    const desired = Math.atan2(-toTarget.x, -toTarget.z);
+    this.rotation = rotateToward(this.rotation, desired, this.turnSpeed * .55 * dt);
+    this.speed = lerp(this.speed, this.maxSpeed * .42, dt);
+    const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nx, nz, 1.1)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+    else { this.pathIndex = (this.pathIndex + 1) % this.path.length; this.speed *= .2; }
+  }
+}
+
+class CharacterAI {
+  constructor(x, z, options = {}) {
+    this.police = !!options.police;
+    this.passive = !!options.passive;
+    this.boss = !!options.boss;
+    this.missionTarget = !!options.missionTarget;
+    this.alive = true;
+    this.health = options.health || (this.boss ? 250 : this.passive ? 25 : 70);
+    this.speed = options.speed || (this.boss ? 7 : this.passive ? 2.2 : 5.2);
+    this.shootCooldown = rand(.3, 1.2);
+    this.wanderAngle = rand(0, Math.PI * 2);
+    this.wanderTimer = rand(1, 4);
+    this.group = new THREE.Group();
+    const mainColor = this.police ? 0x2877d8 : this.passive ? [0xf0a44b, 0x4bd19d, 0x9b66e8][Math.floor(rand(0, 3))] : this.boss ? 0xffce45 : 0x8f284e;
+    const legs = makeBox(.55, .78, .38, this.police ? 0x11192b : 0x23253a, 0, .39, 0);
+    const torso = makeBox(.76, .92, .44, mainColor, 0, 1.16, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.29, 12, 9), material(0xb9795f)); head.position.y = 1.88;
+    this.group.add(legs, torso, head);
+    if (this.police) {
+      const badge = makeBox(.09, .11, .02, 0xffd95a, .18, 1.34, -.24);
+      this.group.add(badge);
+    }
+    if (this.boss) {
+      const coat = makeBox(.93, 1.05, .52, 0x141724, 0, 1.2, .05);
+      const chain = makeBox(.3, .06, .03, 0xffd24f, 0, 1.45, -.29);
+      this.group.add(coat, chain);
+      this.group.scale.setScalar(1.18);
+    }
+    this.group.position.set(x, 0, z);
+    this.group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.userData.entity = this; } });
+    scene.add(this.group);
+    if (this.passive) pedestrians.push(this); else enemies.push(this);
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (this.passive) return this.updateWander(dt);
+    const target = getPlayerPosition();
+    const offset = tmpV.copy(target).sub(this.group.position);
+    const distance = offset.length();
+    if (distance < 68 || this.police) {
+      this.group.rotation.y = Math.atan2(offset.x, offset.z);
+      if (distance > (this.boss ? 10 : 13)) {
+        offset.normalize();
+        const nx = this.group.position.x + offset.x * this.speed * dt;
+        const nz = this.group.position.z + offset.z * this.speed * dt;
+        if (!collidesAt(nx, nz, .45)) { this.group.position.x = nx; this.group.position.z = nz; }
+        else this.group.rotation.y += rand(-1.4, 1.4);
+      }
+      this.shootCooldown -= dt;
+      if (distance < (this.boss ? 34 : 27) && this.shootCooldown <= 0) {
+        const damage = this.boss ? rand(9, 15) : rand(5, 10);
+        damagePlayer(damage);
+        audio.tone(this.police ? 320 : 260, .07, 'square', .06, -100);
+        this.shootCooldown = this.boss ? .62 : rand(1.1, 2.1);
+      }
+    }
+  }
+  updateWander(dt) {
+    this.wanderTimer -= dt;
+    if (this.wanderTimer <= 0) {
+      this.wanderTimer = rand(1.5, 5);
+      this.wanderAngle += rand(-1.6, 1.6);
+    }
+    const nx = this.group.position.x + Math.sin(this.wanderAngle) * this.speed * dt;
+    const nz = this.group.position.z + Math.cos(this.wanderAngle) * this.speed * dt;
+    if (!collidesAt(nx, nz, .42)) { this.group.position.x = nx; this.group.position.z = nz; }
+    else { this.wanderAngle += Math.PI * rand(.5, 1.2); }
+    this.group.rotation.y = this.wanderAngle;
+  }
+  takeDamage(amount, vehicleHit = false) {
+    if (!this.alive) return;
+    this.health -= amount;
+    audio.hit();
+    flashMesh(this.group, 0xffffff);
+    if (!this.passive && !this.police) {
+      state.wanted = Math.max(state.wanted, 1);
+      state.wantedHeat = 22;
+    }
+    if (this.passive) {
+      state.wanted = Math.max(state.wanted, 2);
+      state.wantedHeat = 35;
+      this.passive = false;
+    }
+    if (this.health <= 0) this.die(vehicleHit);
+  }
+  die() {
+    this.alive = false;
+    if (this.missionTarget) state.missionKills++;
+    if (this.police) { state.wanted = Math.min(5, state.wanted + 1); state.wantedHeat = 45; }
+    this.group.rotation.z = Math.PI / 2;
+    this.group.position.y = .35;
+    setTimeout(() => {
+      scene.remove(this.group);
+      enemies = enemies.filter(e => e !== this);
+      pedestrians = pedestrians.filter(e => e !== this);
+    }, 1800);
+  }
+}
+
+function rotateToward(current, target, maxDelta) {
+  let delta = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return current + clamp(delta, -maxDelta, maxDelta);
+}
+
+function flashMesh(group, color) {
+  const originals = [];
+  group.traverse(o => {
+    if (o.isMesh && o.material?.color) { originals.push([o, o.material.color.getHex()]); o.material.color.setHex(color); }
+  });
+  setTimeout(() => originals.forEach(([o, c]) => o.material?.color?.setHex(c)), 70);
+}
+
+function buildWorld() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x101a34);
+  scene.fog = new THREE.FogExp2(0x101a34, .0045);
+
+  camera = new THREE.PerspectiveCamera(64, innerWidth / innerHeight, .1, 650);
+  renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: state.quality !== 'low', powerPreference: 'high-performance' });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  applyQuality(state.quality);
+
+  hemi = new THREE.HemisphereLight(0x83a9ff, 0x15202d, 1.75);
+  scene.add(hemi);
+  sun = new THREE.DirectionalLight(0xffd0a1, 3.2);
+  sun.position.set(80, 110, -50);
+  sun.castShadow = state.quality === 'high';
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -110; sun.shadow.camera.right = 110; sun.shadow.camera.top = 110; sun.shadow.camera.bottom = -110;
+  scene.add(sun);
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 360), material(0x314b3b, 1));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(45, 360), material(0xc7a86f, 1));
+  beach.rotation.x = -Math.PI / 2; beach.position.set(157, .015, 0); beach.receiveShadow = true; scene.add(beach);
+  const ocean = new THREE.Mesh(new THREE.PlaneGeometry(260, 520, 20, 20), new THREE.MeshStandardMaterial({ color:0x0b6f91, roughness:.22, metalness:.1, transparent:true, opacity:.92 }));
+  ocean.rotation.x = -Math.PI / 2; ocean.position.set(300, -.25, 0); scene.add(ocean);
+
+  buildRoads();
+  buildBuildings();
+  buildDecorations();
+  buildVehicles();
+  buildPopulation();
+  buildInteractables();
+  buildRain();
+  objectiveMarker = buildMarker(0xff3eb5);
+  objectiveMarker.visible = false;
+  player = createPlayer();
+  updateLighting(0);
+}
+
+function buildRoads() {
+  const roadMat = material(0x232733, .96);
