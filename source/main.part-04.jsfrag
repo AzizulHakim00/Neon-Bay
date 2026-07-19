@@ -1,0 +1,170 @@
+  const m=state.currentMission,s=state.missionStep;
+  dom.missionNumber.textContent=`JOB ${String(m+1).padStart(2,'0')}`;
+  dom.missionTitle.textContent=MISSIONS[m].title;
+  let text='', pos=null, progress=0;
+  if (m===0) {
+    if(s===0){text='Meet your contact in the apartment courtyard.';pos=new THREE.Vector3(-118,0,-136);progress=.12;}
+    else if(s===1){text='Enter the pink Sunset sports car.';pos=getVehicle('sunset').mesh.position;progress=.38;}
+    else if(s===2){text='Drive the Sunset to the Coastline garage.';pos=new THREE.Vector3(108,0,-90);progress=.72;}
+  } else if(m===1) {
+    if(s===0){text='Go to the beach exchange point.';pos=new THREE.Vector3(132,0,-132);progress=.18;}
+    else if(s===1){text=`Survive the ambush. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(132,0,-132);progress=.45+Math.min(.35,state.missionKills*.11);}
+    else if(s===2){text='Lose the police and reach the marina pier.';pos=new THREE.Vector3(193,0,125);progress=.88;}
+  } else if(m===2) {
+    if(s===0){text='Collect the package at the harbor warehouse.';pos=new THREE.Vector3(112,0,96);progress=.18;}
+    else if(s===1){text='Get into a vehicle before the patrol arrives.';pos=nearestVehiclePosition();progress=.36;}
+    else if(s===2){text=`Deliver to the safehouse. ${Math.max(0,Math.ceil(state.missionTimer))} seconds remaining.`;pos=new THREE.Vector3(-141,0,112);progress=.58+Math.min(.38,(90-state.missionTimer)/90*.38);}
+  } else if(m===3) {
+    if(s===0){text='Enter the warehouse yard.';pos=new THREE.Vector3(96,0,114);progress=.15;}
+    else if(s===1){text=`Clear the warehouse. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(96,0,114);progress=.33+Math.min(.38,state.missionKills*.06);}
+    else if(s===2){text='Recover the stolen ledger.';pos=new THREE.Vector3(112,0,104);progress=.78;}
+    else if(s===3){text='Take the ledger to the apartment safehouse.';pos=new THREE.Vector3(-141,0,112);progress=.9;}
+  } else if(m===4) {
+    if(s===0){text='Meet the district boss at the old hotel.';pos=new THREE.Vector3(0,0,120);progress=.15;}
+    else if(s===1){text=`Defeat the boss and guards. Hostiles remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(0,0,120);progress=.35+Math.min(.42,state.missionKills*.08);}
+    else if(s===2){text='Escape to the end of the pier.';pos=new THREE.Vector3(200,0,125);progress=.9;}
+  }
+  dom.missionObjective.textContent=text;
+  dom.objectiveProgress.style.width=`${progress*100}%`;
+  if(pos){ objectiveMarker.visible=true; objectiveMarker.position.copy(pos); }
+  else objectiveMarker.visible=false;
+  if(force) notify(text,3.2);
+}
+
+function updateMission(dt) {
+  if (!state.running || state.paused || state.gameOver) return;
+  const m=state.currentMission,s=state.missionStep,p=getPlayerPosition();
+  objectiveMarker.rotation.y += dt*1.7;
+  objectiveMarker.children[2].position.y = 3.2 + Math.sin(worldTime*3)*.35;
+  if(m===0){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<3.5) advanceMissionStep();
+    else if(s===1 && state.activeVehicle?.id==='sunset') advanceMissionStep();
+    else if(s===2 && state.activeVehicle?.id==='sunset' && p.distanceTo(objectiveMarker.position)<5.5) completeMission();
+  } else if(m===1){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<4){
+      state.missionTargetKills=3; state.missionKills=0;
+      spawnEnemiesAround(new THREE.Vector3(130,0,-130),3,false); state.wanted=1; state.wantedHeat=30; advanceMissionStep();
+    } else if(s===1 && state.missionKills>=state.missionTargetKills){ state.wanted=Math.max(state.wanted,2); state.wantedHeat=35; advanceMissionStep(); }
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6 && state.wanted===0) completeMission();
+  } else if(m===2){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<4){ audio.pickup(); notify('Package secured. Police scanners are active.',3); advanceMissionStep(); }
+    else if(s===1 && state.activeVehicle){ state.wanted=2;state.wantedHeat=45;state.missionTimer=90;advanceMissionStep(); }
+    else if(s===2){
+      state.missionTimer-=dt;
+      if(Math.floor(state.missionTimer*2)%2===0) updateMissionObjective();
+      if(state.missionTimer<=0) failMission('The delivery window closed.');
+      else if(p.distanceTo(objectiveMarker.position)<6) completeMission();
+    }
+  } else if(m===3){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){state.missionTargetKills=6;state.missionKills=0;spawnEnemiesAround(new THREE.Vector3(96,0,104),6,false);advanceMissionStep();}
+    else if(s===1 && state.missionKills>=state.missionTargetKills) advanceMissionStep();
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<4){audio.pickup();notify('Ledger recovered.',2);advanceMissionStep();}
+    else if(s===3 && p.distanceTo(objectiveMarker.position)<5) completeMission();
+  } else if(m===4){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){
+      state.missionTargetKills=5;state.missionKills=0;
+      spawnEnemiesAround(new THREE.Vector3(0,0,120),4,false);
+      new CharacterAI(6,120,{boss:true,health:300,speed:6.5,missionTarget:true});
+      advanceMissionStep();
+    } else if(s===1 && state.missionKills>=state.missionTargetKills){state.wanted=3;state.wantedHeat=50;advanceMissionStep();}
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6) completeMission(true);
+  }
+}
+
+function advanceMissionStep() {
+  state.missionStep++;
+  audio.pickup();
+  updateMissionObjective(true);
+  saveGame(true);
+}
+
+function completeMission(final = false) {
+  state.running=false;
+  audio.mission();
+  const mission=MISSIONS[state.currentMission];
+  state.cash+=mission.reward;
+  dom.completeTitle.textContent=mission.title;
+  dom.completeSummary.textContent=mission.summary;
+  dom.completeReward.textContent=`+$${mission.reward.toLocaleString()}`;
+  $('#next-mission-btn').textContent=final?'Finish Chapter':'Continue';
+  showScreen(dom.complete);
+  if(final){state.chapterComplete=true;localStorage.setItem('neon-bay-chapter-complete','1');}
+  saveGame(true);
+}
+
+function failMission(reason='Mission failed.') {
+  if(state.gameOver) return;
+  state.gameOver=true;state.running=false;
+  notify(reason,2.5);
+  setTimeout(()=>{
+    state.cash=Math.max(0,state.cash-200);
+    showScreen(dom.gameOver);
+  },800);
+}
+
+function spawnEnemiesAround(center,count,police=false) {
+  for(let i=0;i<count;i++){
+    const angle=i/count*Math.PI*2+rand(-.3,.3),radius=rand(8,16);
+    const x=center.x+Math.cos(angle)*radius,z=center.z+Math.sin(angle)*radius;
+    let sx=x, sz=z;
+    for(let attempt=0; attempt<8 && collidesAt(sx,sz,.5); attempt++){
+      const a2=rand(0,Math.PI*2), r2=rand(7,18); sx=center.x+Math.cos(a2)*r2; sz=center.z+Math.sin(a2)*r2;
+    }
+    new CharacterAI(sx,sz,{police,health:police?85:70,missionTarget:!police});
+  }
+}
+
+function clearMissionEnemies() {
+  enemies.forEach(e=>scene?.remove(e.group)); enemies=[];
+  policeCruisers.forEach(v=>{scene?.remove(v.mesh);vehicles=vehicles.filter(x=>x!==v);}); policeCruisers=[];
+}
+
+function updatePlayer(dt) {
+  if (!player || state.activeVehicle || !state.running || state.paused || state.gameOver) return;
+  const forward=inputAxis('forward'),turn=inputAxis('turn');
+  const moving=Math.abs(forward)>.03||Math.abs(turn)>.03;
+  const sprint=(input.keys.has('ShiftLeft')||input.keys.has('ShiftRight'))&&state.stamina>2&&forward>.1;
+  const speed=sprint?CONFIG.sprintSpeed:CONFIG.playerSpeed;
+  if(sprint)state.stamina=Math.max(0,state.stamina-dt*24);else state.stamina=Math.min(100,state.stamina+dt*(moving?9:16));
+  const fwd=tmpV.set(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw));
+  const right=tmpV2.set(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
+  const move=new THREE.Vector3().addScaledVector(fwd,forward).addScaledVector(right,turn);
+  if(move.lengthSq()>1)move.normalize();
+  if(move.lengthSq()>.01){
+    player.rotation.y=Math.atan2(move.x,move.z);
+    const nx=player.position.x+move.x*speed*dt,nz=player.position.z+move.z*speed*dt;
+    if(!collidesAt(nx,player.position.z,.52))player.position.x=nx;
+    if(!collidesAt(player.position.x,nz,.52))player.position.z=nz;
+  }
+  if((input.jumpQueued||input.keys.has('Space'))&&player.position.y<=.001){playerVelocity.y=CONFIG.jumpVelocity;audio.tone(180,.08,'triangle',.06,80);}
+  input.jumpQueued=false;
+  playerVelocity.y-=CONFIG.gravity*dt;
+  player.position.y+=playerVelocity.y*dt;
+  if(player.position.y<0){player.position.y=0;playerVelocity.y=0;}
+  const gait=moving?Math.sin(worldTime*(sprint?14:9))*.12:0;
+  player.children[0].rotation.x=gait;
+}
+
+function inputAxis(kind) {
+  if(kind==='forward') return clamp((input.keys.has('KeyW')?1:0)+(input.keys.has('KeyS')?-1:0)-input.mobileY,-1,1);
+  return clamp((input.keys.has('KeyD')?1:0)+(input.keys.has('KeyA')?-1:0)+input.mobileX,-1,1);
+}
+
+function updateCamera(dt) {
+  const target=state.activeVehicle?state.activeVehicle.mesh.position:player.position;
+  const height=state.activeVehicle?2.4:1.65;
+  const distance=state.activeVehicle?10.5:cameraDistance;
+  const desired=new THREE.Vector3(
+    target.x+Math.sin(cameraYaw)*Math.cos(cameraPitch)*distance,
+    target.y+height-Math.sin(cameraPitch)*distance,
+    target.z+Math.cos(cameraYaw)*Math.cos(cameraPitch)*distance
+  );
+  camera.position.lerp(desired,1-Math.pow(.001,dt));
+  camera.lookAt(target.x,target.y+height,target.z);
+}
+
+function updateAI(dt) {
+  enemies.forEach(e=>e.update(dt));
+  pedestrians.forEach(e=>e.update(dt));
+  vehicles.forEach(v=>v.update(dt));
+}
