@@ -1,0 +1,170 @@
+  }
+}
+const audio = new AudioEngine();
+
+function seededRandom(seed) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+  return () => (value = value * 16807 % 2147483647) / 2147483647;
+}
+const random = seededRandom(96421);
+const rand = (min, max) => min + (max - min) * random();
+
+function material(color, roughness = .75, metalness = .05) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+}
+
+function makeBox(w, h, d, color, x = 0, y = h / 2, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = state.quality === 'high';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function addCollider(x, z, w, d, padding = .3) {
+  collisionBoxes.push({ minX: x - w / 2 - padding, maxX: x + w / 2 + padding, minZ: z - d / 2 - padding, maxZ: z + d / 2 + padding });
+}
+
+function collidesAt(x, z, radius = .55) {
+  const onPier = x >= 150 - radius && x <= 206 + radius && z >= 117 - radius && z <= 133 + radius;
+  if (x < -176 + radius || ((!onPier) && x > 155 - radius) || z < -176 + radius || z > 176 - radius) return true;
+  for (const box of collisionBoxes) {
+    if (x + radius > box.minX && x - radius < box.maxX && z + radius > box.minZ && z - radius < box.maxZ) return true;
+  }
+  return false;
+}
+
+function createPlayer() {
+  const group = new THREE.Group();
+  const legs = makeBox(.64, .85, .42, 0x17213a, 0, .43, 0);
+  const torso = makeBox(.92, 1.05, .5, 0xff3eb5, 0, 1.25, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.34, 14, 10), material(0xc98768));
+  head.position.y = 2.02;
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(.35, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), material(0x15111c));
+  hair.position.y = 2.15;
+  const armGeo = new THREE.BoxGeometry(.22, .85, .22);
+  const armMat = material(0xc98768);
+  const leftArm = new THREE.Mesh(armGeo, armMat); leftArm.position.set(-.58, 1.28, 0);
+  const rightArm = new THREE.Mesh(armGeo, armMat); rightArm.position.set(.58, 1.28, 0);
+  const gun = makeBox(.12, .12, .62, 0x252a38, .58, .98, -.34);
+  group.add(legs, torso, head, hair, leftArm, rightArm, gun);
+  group.position.set(-130, 0, -118);
+  group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.player = true; } });
+  scene.add(group);
+  playerVelocity = new THREE.Vector3();
+  return group;
+}
+
+class Vehicle {
+  constructor(id, x, z, color = 0xe23d88, rotation = 0, type = 'sport') {
+    this.id = id;
+    this.mesh = new THREE.Group();
+    this.speed = 0;
+    this.rotation = rotation;
+    this.health = 100;
+    this.maxSpeed = type === 'van' ? 26 : type === 'police' ? 32 : 35;
+    this.acceleration = type === 'van' ? 13 : 18;
+    this.turnSpeed = type === 'van' ? 1.45 : 1.9;
+    this.type = type;
+    this.occupied = false;
+    this.destroyed = false;
+    this.ai = false;
+    this.path = null;
+    this.pathIndex = 0;
+    this.direction = 1;
+
+    const body = makeBox(type === 'van' ? 2.2 : 2.05, type === 'van' ? 1.2 : .72, type === 'van' ? 4.3 : 4.1, color, 0, type === 'van' ? .9 : .67, 0);
+    body.material.roughness = .42;
+    body.material.metalness = .25;
+    const cabinColor = type === 'police' ? 0xddeaff : 0x182037;
+    const cabin = makeBox(type === 'van' ? 1.95 : 1.72, type === 'van' ? .8 : .72, type === 'van' ? 2.1 : 1.9, cabinColor, 0, type === 'van' ? 1.65 : 1.3, -.15);
+    const bumperA = makeBox(2.18, .19, .2, 0x161820, 0, .42, -2.1);
+    const bumperB = makeBox(2.18, .19, .2, 0x161820, 0, .42, 2.1);
+    this.mesh.add(body, cabin, bumperA, bumperB);
+
+    this.wheels = [];
+    const wheelGeo = new THREE.CylinderGeometry(.36, .36, .26, 14);
+    wheelGeo.rotateZ(Math.PI / 2);
+    for (const sx of [-1, 1]) for (const sz of [-1.42, 1.42]) {
+      const wheel = new THREE.Mesh(wheelGeo, material(0x111116, .85));
+      wheel.position.set(sx * 1.02, .37, sz);
+      this.wheels.push(wheel);
+      this.mesh.add(wheel);
+    }
+    if (type === 'police') {
+      const bar = makeBox(1.2, .13, .22, 0xe8edf6, 0, 1.82, 0);
+      const red = makeBox(.5, .16, .26, 0xff273c, -.3, 1.91, 0);
+      const blue = makeBox(.5, .16, .26, 0x258cff, .3, 1.91, 0);
+      this.mesh.add(bar, red, blue);
+    }
+    this.mesh.position.set(x, 0, z);
+    this.mesh.rotation.y = rotation;
+    this.mesh.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.vehicle = this; } });
+    scene.add(this.mesh);
+    vehicles.push(this);
+  }
+  update(dt) {
+    if (this.destroyed) return;
+    if (this === state.activeVehicle) this.updatePlayerControlled(dt);
+    else if (this.ai) this.updateAI(dt);
+    this.mesh.position.y = Math.sin(worldTime * 4 + this.mesh.position.x) * .01;
+    this.mesh.rotation.y = this.rotation;
+    this.wheels.forEach(w => w.rotation.x -= this.speed * dt * .85);
+  }
+  updatePlayerControlled(dt) {
+    const forward = inputAxis('forward');
+    const turn = inputAxis('turn');
+    const boost = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');
+    const handbrake = input.keys.has('Space');
+    const targetMax = this.maxSpeed * (boost ? 1.12 : 1);
+    if (forward > .05) this.speed += this.acceleration * forward * dt;
+    else if (forward < -.05) this.speed += this.acceleration * .72 * forward * dt;
+    else this.speed *= Math.pow(.24, dt);
+    if (handbrake) this.speed *= Math.pow(.04, dt);
+    this.speed = clamp(this.speed, -12, targetMax);
+    const speedFactor = clamp(Math.abs(this.speed) / 7, .2, 1);
+    this.rotation -= turn * this.turnSpeed * speedFactor * Math.sign(this.speed || 1) * dt;
+    const nextX = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nextZ = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nextX, nextZ, 1.25)) {
+      this.mesh.position.x = nextX;
+      this.mesh.position.z = nextZ;
+    } else {
+      if (Math.abs(this.speed) > 10) {
+        this.health -= Math.abs(this.speed) * .55;
+        damagePlayer(Math.abs(this.speed) * .12);
+        audio.hit();
+      }
+      this.speed *= -.22;
+      if (this.health <= 0) destroyVehicle(this);
+    }
+    const hitEntities = [...enemies, ...pedestrians].filter(e => e.alive && e.group.position.distanceTo(this.mesh.position) < 1.7);
+    hitEntities.forEach(entity => {
+      if (Math.abs(this.speed) > 8) {
+        entity.takeDamage(Math.abs(this.speed) * 4, true);
+        this.speed *= .72;
+        state.wanted = Math.max(state.wanted, entity.police ? 3 : 1);
+        state.wantedHeat = 28;
+      }
+    });
+    dom.speedText.textContent = Math.round(Math.abs(this.speed) * 3.6);
+  }
+  updateAI(dt) {
+    if (this.type === 'police') {
+      const target = getPlayerPosition();
+      const toTarget = tmpV.copy(target).sub(this.mesh.position);
+      const desired = Math.atan2(-toTarget.x, -toTarget.z);
+      this.rotation = rotateToward(this.rotation, desired, 1.4 * dt);
+      this.speed = lerp(this.speed, this.maxSpeed * .72, dt * .75);
+      const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+      const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+      if (!collidesAt(nx, nz, 1.2)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+      else { this.rotation += Math.PI * (.55 + random() * .25); this.speed *= .35; }
+      if (toTarget.length() < 3.2) {
+        damagePlayer(10 * dt);
+        if (state.activeVehicle) state.activeVehicle.speed *= .97;
+      }
+      return;
+    }
+    if (!this.path?.length) return;
