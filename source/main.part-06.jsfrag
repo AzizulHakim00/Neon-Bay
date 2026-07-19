@@ -1,0 +1,150 @@
+  ctx.strokeStyle='rgba(190,205,225,.25)';ctx.lineWidth=CONFIG.roadWidth*scale;
+  CONFIG.roadCenters.forEach(c=>{ctx.beginPath();ctx.moveTo(-180*scale,c*scale);ctx.lineTo(180*scale,c*scale);ctx.stroke();ctx.beginPath();ctx.moveTo(c*scale,-180*scale);ctx.lineTo(c*scale,180*scale);ctx.stroke();});
+  ctx.fillStyle='rgba(46,189,208,.35)';ctx.fillRect(155*scale,-180*scale,120*scale,360*scale);
+  if(objectiveMarker?.visible){ctx.fillStyle='#ff3eb5';ctx.beginPath();ctx.arc(objectiveMarker.position.x*scale,objectiveMarker.position.z*scale,5,0,Math.PI*2);ctx.fill();}
+  interactables.forEach(i=>{ctx.fillStyle=`#${i.color.toString(16).padStart(6,'0')}`;ctx.fillRect(i.position.x*scale-2,i.position.z*scale-2,4,4);});
+  vehicles.filter(v=>!v.destroyed).forEach(v=>{ctx.fillStyle=v.type==='police'?'#3287ff':'#e6eaf2';ctx.fillRect(v.mesh.position.x*scale-1.5,v.mesh.position.z*scale-1.5,3,3);});
+  enemies.filter(e=>e.alive).forEach(e=>{ctx.fillStyle=e.police?'#338cff':'#ff4f62';ctx.beginPath();ctx.arc(e.group.position.x*scale,e.group.position.z*scale,2,0,Math.PI*2);ctx.fill();});
+  const p=getPlayerPosition();const rot=state.activeVehicle?state.activeVehicle.rotation:player.rotation.y;
+  ctx.translate(p.x*scale,p.z*scale);ctx.rotate(-rot);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,6);ctx.lineTo(0,3);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
+  const vignette=ctx.createRadialGradient(w/2,h/2,w*.25,w/2,h/2,w*.5);vignette.addColorStop(0,'rgba(0,0,0,0)');vignette.addColorStop(1,'rgba(0,0,0,.55)');ctx.fillStyle=vignette;ctx.fillRect(0,0,w,h);
+}
+
+function notify(message,duration=2) {
+  dom.notification.textContent=message;dom.notification.classList.remove('hidden');notificationTimer=duration;
+}
+
+function updateNotification(dt) {
+  if(notificationTimer>0){notificationTimer-=dt;if(notificationTimer<=0)dom.notification.classList.add('hidden');}
+}
+
+function saveGame(silent=false) {
+  if(!player)return;
+  const p=getPlayerPosition();
+  const data={version:1,currentMission:state.currentMission,missionStep:state.missionStep,cash:state.cash,health:state.health,armor:state.armor,ammo:state.ammo,reserve:state.reserve,timeOfDay:state.timeOfDay,position:{x:p.x,z:p.z},chapterComplete:state.chapterComplete};
+  localStorage.setItem(CONFIG.saveKey,JSON.stringify(data));dom.continueBtn.disabled=false;if(!silent)notify('Game saved.',1.5);
+}
+
+function loadGame() {
+  const raw=localStorage.getItem(CONFIG.saveKey);if(!raw)return false;
+  try{
+    const d=JSON.parse(raw);state.cash=d.cash??500;state.health=d.health??100;state.armor=d.armor??25;state.ammo=d.ammo??12;state.reserve=d.reserve??72;state.timeOfDay=d.timeOfDay??18.3;state.chapterComplete=!!d.chapterComplete;
+    startMission(d.currentMission??0,false);player.position.set(d.position?.x??MISSIONS[state.currentMission].start.x,0,d.position?.z??MISSIONS[state.currentMission].start.z);
+    return true;
+  }catch{return false;}
+}
+
+function newGame() {
+  localStorage.removeItem(CONFIG.saveKey);Object.assign(state,{health:100,armor:25,stamina:100,cash:500,ammo:12,reserve:72,wanted:0,timeOfDay:18.3,weather:'CLEAR',chapterComplete:false,gameOver:false});
+  startMission(0,true);beginPlay();
+}
+
+function beginPlay() {
+  audio.start();state.running=true;state.paused=false;state.gameOver=false;
+  hideAllScreens();dom.hud.classList.remove('hidden');if(isTouch)dom.mobile.classList.remove('hidden');
+  if(!state.activeVehicle)dom.crosshair.classList.toggle('hidden',isTouch);
+  if(!isTouch)dom.canvas.requestPointerLock?.();
+  updateMissionObjective(true);
+}
+
+function showMainMenu() {
+  state.running=false;state.paused=false;document.exitPointerLock?.();hideAllScreens();dom.menu.classList.add('active');dom.hud.classList.add('hidden');dom.mobile.classList.add('hidden');
+  dom.continueBtn.disabled=!localStorage.getItem(CONFIG.saveKey);
+}
+
+function hideAllScreens(){[dom.loading,dom.menu,dom.pause,dom.complete,dom.gameOver].forEach(s=>s.classList.remove('active'));}
+function showScreen(screen){hideAllScreens();screen.classList.add('active');document.exitPointerLock?.();dom.crosshair.classList.add('hidden');}
+
+function togglePause(force) {
+  if(!state.running&&!state.paused)return;
+  state.paused=force??!state.paused;
+  if(state.paused){state.running=false;showScreen(dom.pause);}
+  else{state.running=true;hideAllScreens();if(!state.activeVehicle)dom.crosshair.classList.toggle('hidden',isTouch);if(!isTouch)dom.canvas.requestPointerLock?.();}
+}
+
+function applyQuality(value) {
+  state.quality=value;localStorage.setItem('neon-bay-quality',value);dom.quality.value=value;
+  if(!renderer)return;
+  const ratio=value==='high'?Math.min(devicePixelRatio,2):value==='medium'?Math.min(devicePixelRatio,1.35):1;
+  renderer.setPixelRatio(ratio);renderer.shadowMap.enabled=value==='high';renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  renderer.setSize(innerWidth,innerHeight,false);
+}
+
+function bindEvents() {
+  addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight,false);});
+  addEventListener('keydown',e=>{
+    input.keys.add(e.code);
+    if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+    if(e.code==='KeyE'&&!e.repeat)input.interactQueued=true;
+    if(e.code==='KeyR'&&!e.repeat)reload();
+    if(e.code==='Escape'&&!e.repeat){if(state.running||state.paused)togglePause();}
+  });
+  addEventListener('keyup',e=>input.keys.delete(e.code));
+  addEventListener('mousemove',e=>{
+    if(!state.pointerLocked||state.paused)return;
+    cameraYaw-=e.movementX*.0022*state.sensitivity;cameraPitch=clamp(cameraPitch-e.movementY*.0018*state.sensitivity,-.75,.32);
+  });
+  addEventListener('mousedown',e=>{if(e.button===0&&state.pointerLocked){input.fire=true;shoot();}});
+  addEventListener('mouseup',e=>{if(e.button===0)input.fire=false;});
+  document.addEventListener('pointerlockchange',()=>{state.pointerLocked=document.pointerLockElement===dom.canvas;if(state.running&&!state.pointerLocked&&!isTouch)togglePause(true);});
+  dom.canvas.addEventListener('click',()=>{if(state.running&&!state.pointerLocked&&!isTouch)dom.canvas.requestPointerLock?.();});
+
+  $('#new-game-btn').onclick=newGame;
+  dom.continueBtn.onclick=()=>{if(loadGame())beginPlay();else newGame();};
+  $('#resume-btn').onclick=()=>togglePause(false);
+  $('#save-btn').onclick=()=>saveGame();
+  $('#restart-mission-btn').onclick=()=>{state.gameOver=false;startMission(state.currentMission,true);togglePause(false);};
+  $('#quit-btn').onclick=showMainMenu;
+  $('#retry-btn').onclick=()=>{state.gameOver=false;startMission(state.currentMission,true);beginPlay();};
+  $('#gameover-menu-btn').onclick=showMainMenu;
+  $('#next-mission-btn').onclick=()=>{
+    if(state.currentMission>=MISSIONS.length-1){showMainMenu();notify('Chapter One complete.',3);}
+    else{startMission(state.currentMission+1,true);beginPlay();}
+  };
+  $('#how-btn').onclick=()=>$('#how-panel').classList.remove('hidden');
+  $('#settings-btn').onclick=()=>$('#settings-panel').classList.remove('hidden');
+  document.querySelectorAll('.close-modal').forEach(b=>b.onclick=()=>b.closest('.modal').classList.add('hidden'));
+  dom.quality.onchange=e=>applyQuality(e.target.value);
+  dom.music.onchange=e=>audio.setMusic(e.target.checked);
+  dom.sfx.onchange=e=>state.sfxEnabled=e.target.checked;
+  dom.sensitivity.oninput=e=>state.sensitivity=Number(e.target.value);
+  bindMobileControls();
+}
+
+function bindMobileControls() {
+  const joystick=$('#joystick'),knob=$('#joystick-knob');let activeId=null;
+  const move=e=>{if(e.pointerId!==activeId)return;const r=joystick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const len=Math.hypot(dx,dy),max=r.width*.34;if(len>max){dx=dx/len*max;dy=dy/len*max;}knob.style.transform=`translate(${dx}px,${dy}px)`;input.mobileX=dx/max;input.mobileY=dy/max;};
+  joystick.addEventListener('pointerdown',e=>{activeId=e.pointerId;joystick.setPointerCapture(e.pointerId);move(e);});joystick.addEventListener('pointermove',move);
+  const end=e=>{if(e.pointerId!==activeId)return;activeId=null;knob.style.transform='';input.mobileX=0;input.mobileY=0;};joystick.addEventListener('pointerup',end);joystick.addEventListener('pointercancel',end);
+  document.querySelectorAll('.mobile-buttons button').forEach(btn=>{
+    btn.addEventListener('pointerdown',e=>{e.preventDefault();const a=btn.dataset.action;if(a==='fire')shoot();if(a==='jump')input.jumpQueued=true;if(a==='interact')input.interactQueued=true;});
+  });
+  let lookId=null,lastX=0,lastY=0;
+  dom.canvas.addEventListener('pointerdown',e=>{if(!isTouch||e.clientX<innerWidth*.35)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;cameraYaw-=(e.clientX-lastX)*.008*state.sensitivity;cameraPitch=clamp(cameraPitch-(e.clientY-lastY)*.006*state.sensitivity,-.75,.32);lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null;});
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  if(state.running&&!state.paused&&!state.gameOver){
+    updatePlayer(dt);updateAI(dt);updateCamera(dt);updateMission(dt);updateWanted(dt);updateWorld(dt);updateInteractions();updateNotification(dt);updateHUD();drawMinimap();
+    if(input.fire)shoot();saveTimer+=dt;if(saveTimer>30){saveTimer=0;saveGame(true);}
+  } else if(scene){updateCamera(dt);updateWorld(dt*.18);updateNotification(dt);drawMinimap();}
+  renderer.render(scene,camera);
+}
+
+async function init() {
+  try{
+    state.quality=localStorage.getItem('neon-bay-quality')||'high';
+    buildWorld();bindEvents();clock=new THREE.Clock();
+    dom.quality.value=state.quality;dom.continueBtn.disabled=!localStorage.getItem(CONFIG.saveKey);
+    await new Promise(r=>setTimeout(r,450));dom.loading.classList.remove('active');dom.menu.classList.add('active');
+    animate();
+  }catch(error){
+    console.error(error);dom.loading.innerHTML=`<div class="loading-card"><div class="eyebrow">STARTUP ERROR</div><h2 style="font-size:48px;margin:20px 0">Neon Bay could not start</h2><p>${String(error.message||error)}</p><p>Try enabling hardware acceleration or using a current Chrome, Edge, or Firefox browser.</p></div>`;
+  }
+}
+
+init();
