@@ -1,106 +1,14 @@
-  }
-}
-const audio = new AudioEngine();
-
-function seededRandom(seed) {
-  let value = seed % 2147483647;
-  if (value <= 0) value += 2147483646;
-  return () => (value = value * 16807 % 2147483647) / 2147483647;
-}
-const random = seededRandom(96421);
-const rand = (min, max) => min + (max - min) * random();
-
-function material(color, roughness = .75, metalness = .05) {
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
-}
-
-function makeBox(w, h, d, color, x = 0, y = h / 2, z = 0) {
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
-  mesh.position.set(x, y, z);
-  mesh.castShadow = state.quality === 'high';
-  mesh.receiveShadow = true;
-  return mesh;
-}
-
-function addCollider(x, z, w, d, padding = .3) {
-  collisionBoxes.push({ minX: x - w / 2 - padding, maxX: x + w / 2 + padding, minZ: z - d / 2 - padding, maxZ: z + d / 2 + padding });
-}
-
-function collidesAt(x, z, radius = .55) {
-  const onPier = x >= 150 - radius && x <= 206 + radius && z >= 117 - radius && z <= 133 + radius;
-  if (x < -176 + radius || ((!onPier) && x > 155 - radius) || z < -176 + radius || z > 176 - radius) return true;
-  for (const box of collisionBoxes) {
-    if (x + radius > box.minX && x - radius < box.maxX && z + radius > box.minZ && z - radius < box.maxZ) return true;
-  }
-  return false;
-}
-
-function createPlayer() {
-  const group = new THREE.Group();
-  const legs = makeBox(.64, .85, .42, 0x17213a, 0, .43, 0);
-  const torso = makeBox(.92, 1.05, .5, 0xff3eb5, 0, 1.25, 0);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.34, 14, 10), material(0xc98768));
-  head.position.y = 2.02;
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(.35, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), material(0x15111c));
-  hair.position.y = 2.15;
-  const armGeo = new THREE.BoxGeometry(.22, .85, .22);
-  const armMat = material(0xc98768);
-  const leftArm = new THREE.Mesh(armGeo, armMat); leftArm.position.set(-.58, 1.28, 0);
-  const rightArm = new THREE.Mesh(armGeo, armMat); rightArm.position.set(.58, 1.28, 0);
-  const gun = makeBox(.12, .12, .62, 0x252a38, .58, .98, -.34);
-  group.add(legs, torso, head, hair, leftArm, rightArm, gun);
-  group.position.set(-130, 0, -118);
-  group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.player = true; } });
-  scene.add(group);
-  playerVelocity = new THREE.Vector3();
-  return group;
-}
-
-class Vehicle {
-  constructor(id, x, z, color = 0xe23d88, rotation = 0, type = 'sport') {
-    this.id = id;
-    this.mesh = new THREE.Group();
-    this.speed = 0;
-    this.rotation = rotation;
-    this.health = 100;
-    this.maxSpeed = type === 'van' ? 26 : type === 'police' ? 32 : 35;
-    this.acceleration = type === 'van' ? 13 : 18;
-    this.turnSpeed = type === 'van' ? 1.45 : 1.9;
-    this.type = type;
-    this.occupied = false;
-    this.destroyed = false;
     this.ai = false;
     this.path = null;
     this.pathIndex = 0;
     this.direction = 1;
-
-    const body = makeBox(type === 'van' ? 2.2 : 2.05, type === 'van' ? 1.2 : .72, type === 'van' ? 4.3 : 4.1, color, 0, type === 'van' ? .9 : .67, 0);
-    body.material.roughness = .42;
-    body.material.metalness = .25;
-    const cabinColor = type === 'police' ? 0xddeaff : 0x182037;
-    const cabin = makeBox(type === 'van' ? 1.95 : 1.72, type === 'van' ? .8 : .72, type === 'van' ? 2.1 : 1.9, cabinColor, 0, type === 'van' ? 1.65 : 1.3, -.15);
-    const bumperA = makeBox(2.18, .19, .2, 0x161820, 0, .42, -2.1);
-    const bumperB = makeBox(2.18, .19, .2, 0x161820, 0, .42, 2.1);
-    this.mesh.add(body, cabin, bumperA, bumperB);
-
-    this.wheels = [];
-    const wheelGeo = new THREE.CylinderGeometry(.36, .36, .26, 14);
-    wheelGeo.rotateZ(Math.PI / 2);
-    for (const sx of [-1, 1]) for (const sz of [-1.42, 1.42]) {
-      const wheel = new THREE.Mesh(wheelGeo, material(0x111116, .85));
-      wheel.position.set(sx * 1.02, .37, sz);
-      this.wheels.push(wheel);
-      this.mesh.add(wheel);
-    }
-    if (type === 'police') {
-      const bar = makeBox(1.2, .13, .22, 0xe8edf6, 0, 1.82, 0);
-      const red = makeBox(.5, .16, .26, 0xff273c, -.3, 1.91, 0);
-      const blue = makeBox(.5, .16, .26, 0x258cff, .3, 1.91, 0);
-      this.mesh.add(bar, red, blue);
-    }
+    this.steerInput = 0;
+    this.slip = 0;
+    this.braking = false;
+    this.handbrake = false;
     this.mesh.position.set(x, 0, z);
     this.mesh.rotation.y = rotation;
-    this.mesh.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.vehicle = this; } });
+    this.mesh.traverse(o => { if (o.isMesh) o.userData.vehicle = this; });
     scene.add(this.mesh);
     vehicles.push(this);
   }
@@ -108,42 +16,60 @@ class Vehicle {
     if (this.destroyed) return;
     if (this === state.activeVehicle) this.updatePlayerControlled(dt);
     else if (this.ai) this.updateAI(dt);
-    this.mesh.position.y = Math.sin(worldTime * 4 + this.mesh.position.x) * .01;
     this.mesh.rotation.y = this.rotation;
     this.wheels.forEach(w => w.rotation.x -= this.speed * dt * .85);
+    updateVehicleVisual(this.model, { speed: this.speed, steer: this.steerInput, braking: this.braking, handbrake: this.handbrake, dt, time: worldTime });
   }
   updatePlayerControlled(dt) {
-    const forward = inputAxis('forward');
-    const turn = inputAxis('turn');
+    const throttle = inputAxis('forward');
+    const rawTurn = inputAxis('turn');
     const boost = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');
-    const handbrake = input.keys.has('Space');
-    const targetMax = this.maxSpeed * (boost ? 1.12 : 1);
-    if (forward > .05) this.speed += this.acceleration * forward * dt;
-    else if (forward < -.05) this.speed += this.acceleration * .72 * forward * dt;
-    else this.speed *= Math.pow(.24, dt);
-    if (handbrake) this.speed *= Math.pow(.04, dt);
-    this.speed = clamp(this.speed, -12, targetMax);
-    const speedFactor = clamp(Math.abs(this.speed) / 7, .2, 1);
-    this.rotation -= turn * this.turnSpeed * speedFactor * Math.sign(this.speed || 1) * dt;
-    const nextX = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
-    const nextZ = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    this.handbrake = input.keys.has('Space');
+    this.braking = (throttle < -.08 && this.speed > 1) || (throttle > .08 && this.speed < -1) || this.handbrake;
+    const targetMax = this.maxSpeed * (boost ? 1.1 : 1);
+
+    if (throttle > .05) {
+      if (this.speed < -1) this.speed += this.spec.brake * dt;
+      else this.speed += this.spec.acceleration * throttle * dt;
+    } else if (throttle < -.05) {
+      if (this.speed > 1) this.speed -= this.spec.brake * dt;
+      else this.speed += this.spec.acceleration * .62 * throttle * dt;
+    } else {
+      const drag = this.spec.drag * (1 + Math.abs(this.speed) * .018);
+      this.speed = THREE.MathUtils.damp(this.speed, 0, drag, dt);
+    }
+    if (this.handbrake) this.speed = THREE.MathUtils.damp(this.speed, 0, 1.7, dt);
+    this.speed = clamp(this.speed, -this.spec.reverseSpeed, targetMax);
+
+    const speedRatio = clamp(Math.abs(this.speed) / Math.max(1, this.maxSpeed), 0, 1);
+    this.steerInput = THREE.MathUtils.damp(this.steerInput, rawTurn, 10, dt);
+    const steeringAuthority = lerp(.34, 1, Math.min(1, Math.abs(this.speed) / 8)) * lerp(1, .62, speedRatio);
+    const grip = this.handbrake ? 1.1 : this.spec.grip;
+    this.slip = THREE.MathUtils.damp(this.slip, this.steerInput * this.speed * (this.handbrake ? .035 : .009), grip, dt);
+    this.rotation -= this.steerInput * this.spec.steering * steeringAuthority * Math.sign(this.speed || 1) * dt;
+    const travelAngle = this.rotation + this.slip;
+    const nextX = this.mesh.position.x - Math.sin(travelAngle) * this.speed * dt;
+    const nextZ = this.mesh.position.z - Math.cos(travelAngle) * this.speed * dt;
     if (!collidesAt(nextX, nextZ, 1.25)) {
       this.mesh.position.x = nextX;
       this.mesh.position.z = nextZ;
     } else {
-      if (Math.abs(this.speed) > 10) {
-        this.health -= Math.abs(this.speed) * .55;
-        damagePlayer(Math.abs(this.speed) * .12);
+      if (Math.abs(this.speed) > 9) {
+        const impact = Math.abs(this.speed) * this.spec.mass;
+        this.health -= impact * .52;
+        damagePlayer(impact * .11);
+        state.cameraShake = Math.min(1, state.cameraShake + impact * .025);
         audio.hit();
       }
-      this.speed *= -.22;
+      this.speed *= -.18;
+      this.slip *= -.25;
       if (this.health <= 0) destroyVehicle(this);
     }
     const hitEntities = [...enemies, ...pedestrians].filter(e => e.alive && e.group.position.distanceTo(this.mesh.position) < 1.7);
     hitEntities.forEach(entity => {
       if (Math.abs(this.speed) > 8) {
-        entity.takeDamage(Math.abs(this.speed) * 4, true);
-        this.speed *= .72;
+        entity.takeDamage(Math.abs(this.speed) * 4.2, true);
+        this.speed *= .7;
         state.wanted = Math.max(state.wanted, entity.police ? 3 : 1);
         state.wantedHeat = 28;
       }
@@ -168,3 +94,104 @@ class Vehicle {
       return;
     }
     if (!this.path?.length) return;
+    const target = this.path[this.pathIndex];
+    const toTarget = tmpV.copy(target).sub(this.mesh.position);
+    if (toTarget.length() < 3) this.pathIndex = (this.pathIndex + 1) % this.path.length;
+    const desired = Math.atan2(-toTarget.x, -toTarget.z);
+    this.rotation = rotateToward(this.rotation, desired, this.turnSpeed * .55 * dt);
+    this.speed = lerp(this.speed, this.maxSpeed * .42, dt);
+    const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nx, nz, 1.1)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+    else { this.pathIndex = (this.pathIndex + 1) % this.path.length; this.speed *= .2; }
+  }
+}
+
+class CharacterAI {
+  constructor(x, z, options = {}) {
+    this.police = !!options.police;
+    this.passive = !!options.passive;
+    this.boss = !!options.boss;
+    this.missionTarget = !!options.missionTarget;
+    this.alive = true;
+    this.health = options.health || (this.boss ? 250 : this.passive ? 25 : 70);
+    this.speed = options.speed || (this.boss ? 7 : this.passive ? 2.2 : 5.2);
+    this.shootCooldown = rand(.3, 1.2);
+    this.wanderAngle = rand(0, Math.PI * 2);
+    this.wanderTimer = rand(1, 4);
+    this.aiState = this.passive ? 'wander' : 'idle';
+    this.lastSeen = new THREE.Vector3(x, 0, z);
+    this.searchTimer = 0;
+    this.coverPoint = null;
+    this.coverTimer = 0;
+    this.alerted = this.police;
+    this.group = new THREE.Group();
+    const mainColor = this.police ? 0x2877d8 : this.passive ? [0xf0a44b, 0x4bd19d, 0x9b66e8][Math.floor(rand(0, 3))] : this.boss ? 0xffce45 : 0x8f284e;
+    const legs = makeBox(.55, .78, .38, this.police ? 0x11192b : 0x23253a, 0, .39, 0);
+    const torso = makeBox(.76, .92, .44, mainColor, 0, 1.16, 0);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(.29, 12, 9), material(0xb9795f)); head.position.y = 1.88;
+    this.group.add(legs, torso, head);
+    if (this.police) {
+      const badge = makeBox(.09, .11, .02, 0xffd95a, .18, 1.34, -.24);
+      this.group.add(badge);
+    }
+    if (this.boss) {
+      const coat = makeBox(.93, 1.05, .52, 0x141724, 0, 1.2, .05);
+      const chain = makeBox(.3, .06, .03, 0xffd24f, 0, 1.45, -.29);
+      this.group.add(coat, chain);
+      this.group.scale.setScalar(1.18);
+    }
+    this.group.position.set(x, 0, z);
+    this.group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.userData.entity = this; } });
+    scene.add(this.group);
+    if (this.passive) pedestrians.push(this); else enemies.push(this);
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (this.passive) return this.updateWander(dt);
+    const target = getPlayerPosition();
+    const distance = this.group.position.distanceTo(target);
+    const canDetect = distance < (this.police ? 92 : 64) || this.alerted;
+
+    if (canDetect && distance < 82) {
+      this.alerted = true;
+      this.lastSeen.copy(target);
+      this.searchTimer = this.police ? 9 : 6;
+      if ((this.health < (this.boss ? 150 : 38) || (this.aiState === 'attack' && random() < .003)) && !this.coverPoint) {
+        this.coverPoint = chooseCoverPoint(this.group.position, target, coverPoints, collidesAt, this.boss ? 34 : 25);
+        if (this.coverPoint) { this.aiState = 'cover'; this.coverTimer = rand(2.2, 4.5); }
+      }
+      if (this.aiState !== 'cover') this.aiState = 'attack';
+    } else if (this.alerted) {
+      this.searchTimer -= dt;
+      this.aiState = this.searchTimer > 0 ? 'search' : 'idle';
+      if (this.searchTimer <= 0) { this.alerted = false; this.coverPoint = null; }
+    }
+
+    if (this.aiState === 'cover' && this.coverPoint) {
+      const coverDistance = moveToward2D(this.group, this.coverPoint, this.speed * 1.08, dt, collidesAt);
+      if (coverDistance < 1.1) {
+        this.coverTimer -= dt;
+        this.group.rotation.y = Math.atan2(target.x - this.group.position.x, target.z - this.group.position.z);
+        this.group.position.y = .08;
+        this.shootCooldown -= dt;
+        if (distance < 35 && this.shootCooldown <= 0) this.fireAtPlayer(distance, true);
+        if (this.coverTimer <= 0) { this.coverPoint = null; this.aiState = 'attack'; this.group.position.y = 0; }
+      }
+      return;
+    }
+
+    if (this.aiState === 'search') {
+      const remaining = moveToward2D(this.group, this.lastSeen, this.speed * .72, dt, collidesAt);
+      if (remaining < 1.5) this.group.rotation.y += dt * .8;
+      return;
+    }
+
+    if (this.aiState === 'attack') {
+      this.group.rotation.y = Math.atan2(target.x - this.group.position.x, target.z - this.group.position.z);
+      const preferred = this.boss ? 11 : this.police ? 12 : 14;
+      if (distance > preferred) moveToward2D(this.group, target, this.speed, dt, collidesAt);
+      this.shootCooldown -= dt;
+      if (distance < (this.boss ? 36 : 29) && this.shootCooldown <= 0) this.fireAtPlayer(distance, false);
+    }
+  }

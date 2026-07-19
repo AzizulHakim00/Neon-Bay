@@ -1,35 +1,3 @@
-
-function updateWanted(dt) {
-  if(state.wanted>0){
-    state.wantedHeat-=dt;
-    wantedSpawnTimer-=dt;
-    if(wantedSpawnTimer<=0){
-      wantedSpawnTimer=clamp(14-state.wanted*1.6,5,12);
-      const pos=getPlayerPosition();
-      const maxOfficers=Math.min(7,state.wanted*2);
-      const activePolice=enemies.filter(e=>e.police).length;
-      if(activePolice<maxOfficers){
-        const a=rand(0,Math.PI*2),r=rand(26,42);
-        new CharacterAI(pos.x+Math.cos(a)*r,pos.z+Math.sin(a)*r,{police:true,health:80});
-      }
-      if(state.wanted>=2&&policeCruisers.length<Math.ceil(state.wanted/2))spawnPoliceCruiser();
-    }
-    const nearestPolice=Math.min(999,...enemies.filter(e=>e.police&&e.alive).map(e=>e.group.position.distanceTo(getPlayerPosition())));
-    if(state.wantedHeat<=0&&nearestPolice>35){state.wanted--;state.wantedHeat=state.wanted>0?18:0;notify(state.wanted?'Wanted level reduced.':'You lost the police.',2);}
-  } else {
-    enemies.filter(e=>e.police).forEach(e=>{e.alive=false;scene.remove(e.group);});
-    enemies=enemies.filter(e=>!e.police);
-    policeCruisers.forEach(v=>{scene.remove(v.mesh);vehicles=vehicles.filter(x=>x!==v);});policeCruisers=[];
-  }
-}
-
-function spawnPoliceCruiser() {
-  const p=getPlayerPosition(),a=rand(0,Math.PI*2),r=rand(38,50);
-  const v=new Vehicle(`police-${Date.now()}`,p.x+Math.cos(a)*r,p.z+Math.sin(a)*r,0x173c82,0,'police');
-  v.ai=true;policeCruisers.push(v);
-}
-
-function updateWorld(dt) {
   worldTime+=dt;
   state.timeOfDay=(state.timeOfDay+dt*.055)%24;
   state.weatherTimer-=dt;
@@ -74,7 +42,7 @@ function updateInteractions() {
     vehicles.filter(v=>!v.ai&&!v.destroyed).forEach(v=>{const d=p.distanceTo(v.mesh.position);if(d<3.1&&d<dist){candidate={type:'vehicle',label:`Enter ${vehicleDisplayName(v)}`,object:v};dist=d;}});
     interactables.forEach(item=>{const d=p.distanceTo(item.position);if(d<item.radius&&d<dist){candidate={type:item.type,label:item.label,object:item};dist=d;}});
   }
-  if(candidate){dom.interaction.classList.remove('hidden');dom.interactionText.textContent=candidate.label;dom.interaction.dataset.type=candidate.type;dom.interaction._candidate=candidate;}
+  if(candidate){dom.interaction.classList.remove('hidden');if(candidate.type==='shop'){const w=currentWeapon();candidate.label=`Buy ${w.shopAmmo} ${w.name} rounds — $${w.shopCost}`;}dom.interactionText.textContent=candidate.label;dom.interaction.dataset.type=candidate.type;dom.interaction._candidate=candidate;}
   else{dom.interaction.classList.add('hidden');dom.interaction._candidate=null;}
   if(input.interactQueued){input.interactQueued=false;if(candidate)performInteraction(candidate);}
 }
@@ -83,7 +51,7 @@ function performInteraction(candidate) {
   if(candidate.type==='vehicle')enterVehicle(candidate.object);
   else if(candidate.type==='exit')exitVehicle();
   else if(candidate.type==='shop'){
-    if(state.cash>=180){state.cash-=180;state.reserve+=36;audio.cash();notify('Purchased 36 rounds.',2);saveGame();}else notify('Not enough cash.',2);
+    const w=currentWeapon();if(state.cash>=w.shopCost){state.cash-=w.shopCost;state.reserve+=w.shopAmmo;storeCurrentWeaponAmmo();audio.cash();notify(`Purchased ${w.shopAmmo} ${w.name} rounds.`,2);saveGame();}else notify('Not enough cash.',2);
   } else if(candidate.type==='clinic'){
     if(state.health>=100)notify('You are already healthy.',2);
     else if(state.cash>=250){state.cash-=250;state.health=100;audio.cash();notify('Health restored.',2);saveGame();}else notify('Not enough cash.',2);
@@ -127,23 +95,41 @@ function getVehicle(id){return vehicles.find(v=>v.id===id);}
 function vehicleDisplayName(v){return v.type==='van'?'Harbor Van':v.id==='sunset'?'Sunset GT':v.id==='ocean'?'Oceanic Coupe':'Vehicle';}
 function getPlayerPosition(){return state.activeVehicle?state.activeVehicle.mesh.position:player.position;}
 
+function currentWeapon(){return WEAPONS[state.weapon];}
+function storeCurrentWeaponAmmo(){state.weaponAmmo[state.weapon]={ammo:state.ammo,reserve:state.reserve};}
+function switchWeapon(id){
+  if(!WEAPONS[id]||state.weapon===id||state.reloading||state.activeVehicle)return;
+  storeCurrentWeaponAmmo();state.weapon=id;state.ammo=state.weaponAmmo[id].ammo;state.reserve=state.weaponAmmo[id].reserve;
+  dom.weaponName.textContent=WEAPONS[id].name;dom.slotPistol.classList.toggle('active',id==='pistol');dom.slotShotgun.classList.toggle('active',id==='shotgun');
+  audio.tone(id==='shotgun'?170:310,.08,'square',.05,70);notify(`${WEAPONS[id].name} equipped.`,1.2);
+}
+function cycleWeapon(){switchWeapon(state.weapon==='pistol'?'shotgun':'pistol');}
+
 function shoot() {
-  if(!state.running||state.paused||state.activeVehicle||state.reloading)return;
-  const now=performance.now();if(now-lastShotAt<220)return;lastShotAt=now;
-  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Magazine empty. Press R to reload.',1.5);return;}
-  state.ammo--;audio.shot();
-  raycaster.setFromCamera(new THREE.Vector2(0,0),camera);
+  if(!state.running||state.paused||state.activeVehicle||state.reloading||(cinematic?.active&&cinematic.mode==='cutscene'))return;
+  const weapon=currentWeapon();const now=performance.now();if(now-lastShotAt<weapon.cadence)return;lastShotAt=now;
+  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Weapon empty. Press R to reload.',1.5);return;}
+  state.ammo--;storeCurrentWeaponAmmo();
+  if(state.weapon==='shotgun'){audio.noise(.16,.32);audio.tone(72,.14,'sawtooth',.13,-28);}else audio.shot();
+  triggerPlayerRecoil(player,state.weapon==='shotgun'?1.5:1);state.cameraShake=Math.min(1,state.cameraShake+(state.weapon==='shotgun'?.38:.14));
   const targets=[];enemies.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
   pedestrians.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
-  const hit=raycaster.intersectObjects(targets,false)[0];
-  if(hit&&hit.distance<90){const entity=hit.object.userData.entity;if(entity)entity.takeDamage(entity.boss?32:42);}
-  state.wantedHeat=Math.max(state.wantedHeat,8);
+  for(let pellet=0;pellet<weapon.pellets;pellet++){
+    const aim=new THREE.Vector2((random()-.5)*weapon.spread,(random()-.5)*weapon.spread);raycaster.setFromCamera(aim,camera);
+    const hit=raycaster.intersectObjects(targets,false)[0];
+    if(hit&&hit.distance<weapon.range){const entity=hit.object.userData.entity;if(entity)entity.takeDamage(entity.boss?weapon.bossDamage:weapon.damage);}
+  }
+  const playerPos=getPlayerPosition();enemies.filter(e=>e.alive&&e.group.position.distanceTo(playerPos)<75).forEach(e=>e.alert(playerPos));
+  state.wantedHeat=Math.max(state.wantedHeat,state.weapon==='shotgun'?14:8);
 }
 
 function reload() {
-  if(state.reloading||state.activeVehicle||state.ammo>=12||state.reserve<=0)return;
-  state.reloading=true;dom.weaponName.textContent='RELOADING…';audio.tone(220,.08,'square',.05);
-  setTimeout(()=>{const needed=12-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;state.reloading=false;dom.weaponName.textContent='9MM PISTOL';audio.tone(420,.08,'square',.05);},1050);
+  const weapon=currentWeapon();if(state.reloading||state.activeVehicle||state.ammo>=weapon.capacity||state.reserve<=0)return;
+  const weaponId=state.weapon;state.reloading=true;dom.weaponName.textContent='RELOADING…';audio.tone(220,.08,'square',.05);
+  setTimeout(()=>{
+    if(state.weapon!==weaponId){state.reloading=false;return;}
+    const needed=weapon.capacity-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;storeCurrentWeaponAmmo();state.reloading=false;dom.weaponName.textContent=weapon.name;audio.tone(420,.08,'square',.05);
+  },weapon.reloadMs);
 }
 
 function damagePlayer(amount) {
@@ -159,12 +145,3 @@ function updateHUD() {
   dom.armorBar.style.width=`${state.armor}%`;dom.armorText.textContent=Math.ceil(state.armor);
   dom.staminaBar.style.width=`${state.stamina}%`;dom.staminaText.textContent=Math.ceil(state.stamina);
   dom.cash.textContent=Math.floor(state.cash).toLocaleString();dom.ammo.textContent=state.ammo;dom.reserve.textContent=state.reserve;
-  dom.wanted.textContent=Array.from({length:5},(_,i)=>i<state.wanted?'★':'☆').join(' ');
-  const h=Math.floor(state.timeOfDay),m=Math.floor((state.timeOfDay-h)*60);dom.clock.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-  dom.weather.textContent=state.weather;
-}
-
-function drawMinimap() {
-  const ctx=mapCtx,w=dom.minimap.width,h=dom.minimap.height,scale=.55;
-  ctx.clearRect(0,0,w,h);ctx.fillStyle='#08101d';ctx.fillRect(0,0,w,h);
-  ctx.save();ctx.translate(w/2,h/2);

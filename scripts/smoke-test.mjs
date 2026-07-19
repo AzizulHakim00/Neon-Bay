@@ -46,12 +46,18 @@ globalThis.HTMLCanvasElement = window.HTMLCanvasElement;
 globalThis.KeyboardEvent = window.KeyboardEvent;
 globalThis.MouseEvent = window.MouseEvent;
 globalThis.Event = window.Event;
+globalThis.location = window.location;
 globalThis.THREE = THREE;
-
+const contentModule = await import('../src/modules/content.js');
+const playerModule = await import('../src/modules/player-model.js');
+const vehicleModule = await import('../src/modules/vehicle-model.js');
+const cinematicModule = await import('../src/modules/cinematic.js');
+const combatModule = await import('../src/modules/combat-ai.js');
+globalThis.NBModules = { ...contentModule, ...playerModule, ...vehicleModule, ...cinematicModule, ...combatModule };
 
 let code = fs.readFileSync(new URL('../src/main.js', import.meta.url), 'utf8');
-code = code.replace("import * as THREE from 'three';", 'const THREE = globalThis.THREE;');
-code = code.replace("import './styles.css';", '');
+code = code.replace(/^import .*;\n/gm, '');
+code = `const THREE = globalThis.THREE;\nconst { WEAPONS, VEHICLE_SPECS, FIRST_RIDE_INTRO, FIRST_RIDE_CONTACT, createPlayerModel, setPlayerWeapon, triggerPlayerRecoil, updatePlayerAnimation, createVehicleModel, updateVehicleVisual, CinematicDirector, buildCoverPoints, chooseCoverPoint, moveToward2D } = globalThis.NBModules;\n${code}`;
 vm.runInThisContext(code, { filename: 'main.js' });
 
 await new Promise(resolve => setTimeout(resolve, 700));
@@ -62,20 +68,10 @@ await new Promise(resolve => setTimeout(resolve, 50));
 if (document.querySelector('#hud').classList.contains('hidden')) throw new Error('HUD did not become visible');
 if (document.querySelector('#mission-title').textContent !== 'First Ride') throw new Error('First mission did not initialize');
 if (!localStorage.getItem('neon-bay-save-v1')) throw new Error('New game did not create a save');
-
 window.dispatchEvent(new window.KeyboardEvent('keydown', { code: 'Escape' }));
 await new Promise(resolve => setTimeout(resolve, 20));
 if (!document.querySelector('#pause-menu').classList.contains('active')) throw new Error('Pause menu did not open');
-
 document.querySelector('#resume-btn').click();
 await new Promise(resolve => setTimeout(resolve, 20));
 if (document.querySelector('#pause-menu').classList.contains('active')) throw new Error('Pause menu did not close');
-
-console.log(JSON.stringify({
-  menu: 'ok',
-  newGame: 'ok',
-  mission: document.querySelector('#mission-title').textContent,
-  objective: document.querySelector('#mission-objective').textContent,
-  save: 'ok',
-  pauseResume: 'ok'
-}, null, 2));
+console.log(JSON.stringify({ menu: 'ok', newGame: 'ok', mission: document.querySelector('#mission-title').textContent, objective: document.querySelector('#mission-objective').textContent, save: 'ok', pauseResume: 'ok' }, null, 2));

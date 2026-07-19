@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neon Bay v1.1 Trailer</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#03050b;color:#fff;font-family:Inter,Arial,sans-serif}.stage{position:relative;width:100%;height:100%;background:#03050b}.slide{position:absolute;inset:0;opacity:0;animation:show 18s infinite;background-position:center;background-size:cover}.slide:nth-child(1){background-image:url('/media/neon-bay-ocean-drive.svg');animation-delay:0s}.slide:nth-child(2){background-image:url('/media/neon-bay-vehicle-lineup.svg');animation-delay:3s}.slide:nth-child(3){background-image:url('/media/neon-bay-driving-physics.svg');animation-delay:6s}.slide:nth-child(4){background-image:url('/media/neon-bay-shotgun-combat.svg');animation-delay:9s}.slide:nth-child(5){background-image:url('/media/neon-bay-first-ride-dialogue.svg');animation-delay:12s}.slide:nth-child(6){background-image:url('/media/neon-bay-police-chase.svg');animation-delay:15s}@keyframes show{0%{opacity:0;transform:scale(1.035)}3%{opacity:1}14%{opacity:1;transform:scale(1)}17%{opacity:0}100%{opacity:0}}.top{position:absolute;top:0;left:0;right:0;height:42px;background:rgba(2,3,9,.82);display:flex;align-items:center;padding:0 24px;letter-spacing:.22em;font-weight:800;color:#4aeaff;z-index:20}.controls{position:absolute;right:18px;bottom:18px;z-index:30;display:flex;gap:10px}.controls a,.controls button{border:1px solid rgba(255,255,255,.25);background:rgba(4,7,18,.82);color:#fff;padding:10px 14px;border-radius:999px;text-decoration:none;font-weight:700;cursor:pointer}.controls a:hover,.controls button:hover{border-color:#ff3eb5}.note{position:absolute;left:18px;bottom:18px;z-index:30;background:rgba(4,7,18,.82);padding:10px 14px;border-radius:10px;color:#cbd3e7;font-size:13px}.paused .slide{animation-play-state:paused}
+  </style>
+</head>
+<body>
+  <main id="stage" class="stage" aria-label="Neon Bay v1.1 release trailer">
+    <div class="slide"></div><div class="slide"></div><div class="slide"></div><div class="slide"></div><div class="slide"></div><div class="slide"></div>
+    <div class="top">NEON BAY v1.1 · RELEASE TRAILER</div>
+    <div class="note">Original promotional visualization · 18-second loop</div>
+    <div class="controls"><button id="pause">Pause</button><a href="/">Back to Game</a></div>
+  </main>
+  <script>const stage=document.querySelector('#stage'),button=document.querySelector('#pause');button.addEventListener('click',()=>{stage.classList.toggle('paused');button.textContent=stage.classList.contains('paused')?'Play':'Pause';});</script>
+</body>
+</html>

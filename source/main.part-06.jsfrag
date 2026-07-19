@@ -1,3 +1,13 @@
+  if(!state.reloading)dom.weaponName.textContent=currentWeapon().name;dom.slotPistol.classList.toggle('active',state.weapon==='pistol');dom.slotShotgun.classList.toggle('active',state.weapon==='shotgun');
+  dom.wanted.textContent=Array.from({length:5},(_,i)=>i<state.wanted?'★':'☆').join(' ');
+  const h=Math.floor(state.timeOfDay),m=Math.floor((state.timeOfDay-h)*60);dom.clock.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  dom.weather.textContent=state.weather;
+}
+
+function drawMinimap() {
+  const ctx=mapCtx,w=dom.minimap.width,h=dom.minimap.height,scale=.55;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#08101d';ctx.fillRect(0,0,w,h);
+  ctx.save();ctx.translate(w/2,h/2);
   ctx.strokeStyle='rgba(190,205,225,.25)';ctx.lineWidth=CONFIG.roadWidth*scale;
   CONFIG.roadCenters.forEach(c=>{ctx.beginPath();ctx.moveTo(-180*scale,c*scale);ctx.lineTo(180*scale,c*scale);ctx.stroke();ctx.beginPath();ctx.moveTo(c*scale,-180*scale);ctx.lineTo(c*scale,180*scale);ctx.stroke();});
   ctx.fillStyle='rgba(46,189,208,.35)';ctx.fillRect(155*scale,-180*scale,120*scale,360*scale);
@@ -21,22 +31,24 @@ function updateNotification(dt) {
 function saveGame(silent=false) {
   if(!player)return;
   const p=getPlayerPosition();
-  const data={version:1,currentMission:state.currentMission,missionStep:state.missionStep,cash:state.cash,health:state.health,armor:state.armor,ammo:state.ammo,reserve:state.reserve,timeOfDay:state.timeOfDay,position:{x:p.x,z:p.z},chapterComplete:state.chapterComplete};
+  storeCurrentWeaponAmmo();
+  const data={version:2,currentMission:state.currentMission,missionStep:state.missionStep,cash:state.cash,health:state.health,armor:state.armor,ammo:state.ammo,reserve:state.reserve,weapon:state.weapon,weaponAmmo:state.weaponAmmo,timeOfDay:state.timeOfDay,position:{x:p.x,z:p.z},chapterComplete:state.chapterComplete};
   localStorage.setItem(CONFIG.saveKey,JSON.stringify(data));dom.continueBtn.disabled=false;if(!silent)notify('Game saved.',1.5);
 }
 
 function loadGame() {
   const raw=localStorage.getItem(CONFIG.saveKey);if(!raw)return false;
   try{
-    const d=JSON.parse(raw);state.cash=d.cash??500;state.health=d.health??100;state.armor=d.armor??25;state.ammo=d.ammo??12;state.reserve=d.reserve??72;state.timeOfDay=d.timeOfDay??18.3;state.chapterComplete=!!d.chapterComplete;
+    const d=JSON.parse(raw);state.cash=d.cash??500;state.health=d.health??100;state.armor=d.armor??25;state.weapon=d.weapon&&WEAPONS[d.weapon]?d.weapon:'pistol';state.weaponAmmo=d.weaponAmmo??{pistol:{ammo:d.ammo??12,reserve:d.reserve??72},shotgun:{ammo:6,reserve:24}};state.weaponAmmo.pistol??={ammo:12,reserve:72};state.weaponAmmo.shotgun??={ammo:6,reserve:24};state.ammo=state.weaponAmmo[state.weapon].ammo;state.reserve=state.weaponAmmo[state.weapon].reserve;state.timeOfDay=d.timeOfDay??18.3;state.chapterComplete=!!d.chapterComplete;
     startMission(d.currentMission??0,false);player.position.set(d.position?.x??MISSIONS[state.currentMission].start.x,0,d.position?.z??MISSIONS[state.currentMission].start.z);
     return true;
   }catch{return false;}
 }
 
 function newGame() {
-  localStorage.removeItem(CONFIG.saveKey);Object.assign(state,{health:100,armor:25,stamina:100,cash:500,ammo:12,reserve:72,wanted:0,timeOfDay:18.3,weather:'CLEAR',chapterComplete:false,gameOver:false});
+  localStorage.removeItem(CONFIG.saveKey);Object.assign(state,{health:100,armor:25,stamina:100,cash:500,ammo:12,reserve:72,weapon:'pistol',weaponAmmo:{pistol:{ammo:12,reserve:72},shotgun:{ammo:6,reserve:24}},wanted:0,timeOfDay:18.3,weather:'CLEAR',chapterComplete:false,gameOver:false});
   startMission(0,true);beginPlay();
+  if(!(globalThis.__CAPTURE_MODE||new URLSearchParams(location.search).has('capture'))) playFirstRideIntro();
 }
 
 function beginPlay() {
@@ -75,8 +87,12 @@ function bindEvents() {
   addEventListener('keydown',e=>{
     input.keys.add(e.code);
     if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code))e.preventDefault();
+    if(cinematic?.active&&e.code==='Space'&&!e.repeat){cinematic.finish();state.cinematicShot=null;return;}
     if(e.code==='KeyE'&&!e.repeat)input.interactQueued=true;
     if(e.code==='KeyR'&&!e.repeat)reload();
+    if((e.code==='Digit1'||e.code==='Numpad1')&&!e.repeat)switchWeapon('pistol');
+    if((e.code==='Digit2'||e.code==='Numpad2')&&!e.repeat)switchWeapon('shotgun');
+    if(e.code==='KeyQ'&&!e.repeat)cycleWeapon();
     if(e.code==='Escape'&&!e.repeat){if(state.running||state.paused)togglePause();}
   });
   addEventListener('keyup',e=>input.keys.delete(e.code));
@@ -113,38 +129,3 @@ function bindEvents() {
 
 function bindMobileControls() {
   const joystick=$('#joystick'),knob=$('#joystick-knob');let activeId=null;
-  const move=e=>{if(e.pointerId!==activeId)return;const r=joystick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const len=Math.hypot(dx,dy),max=r.width*.34;if(len>max){dx=dx/len*max;dy=dy/len*max;}knob.style.transform=`translate(${dx}px,${dy}px)`;input.mobileX=dx/max;input.mobileY=dy/max;};
-  joystick.addEventListener('pointerdown',e=>{activeId=e.pointerId;joystick.setPointerCapture(e.pointerId);move(e);});joystick.addEventListener('pointermove',move);
-  const end=e=>{if(e.pointerId!==activeId)return;activeId=null;knob.style.transform='';input.mobileX=0;input.mobileY=0;};joystick.addEventListener('pointerup',end);joystick.addEventListener('pointercancel',end);
-  document.querySelectorAll('.mobile-buttons button').forEach(btn=>{
-    btn.addEventListener('pointerdown',e=>{e.preventDefault();const a=btn.dataset.action;if(a==='fire')shoot();if(a==='jump')input.jumpQueued=true;if(a==='interact')input.interactQueued=true;});
-  });
-  let lookId=null,lastX=0,lastY=0;
-  dom.canvas.addEventListener('pointerdown',e=>{if(!isTouch||e.clientX<innerWidth*.35)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;});
-  dom.canvas.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;cameraYaw-=(e.clientX-lastX)*.008*state.sensitivity;cameraPitch=clamp(cameraPitch-(e.clientY-lastY)*.006*state.sensitivity,-.75,.32);lastX=e.clientX;lastY=e.clientY;});
-  dom.canvas.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null;});
-}
-
-function animate() {
-  requestAnimationFrame(animate);
-  const dt=Math.min(clock.getDelta(),.05);
-  if(state.running&&!state.paused&&!state.gameOver){
-    updatePlayer(dt);updateAI(dt);updateCamera(dt);updateMission(dt);updateWanted(dt);updateWorld(dt);updateInteractions();updateNotification(dt);updateHUD();drawMinimap();
-    if(input.fire)shoot();saveTimer+=dt;if(saveTimer>30){saveTimer=0;saveGame(true);}
-  } else if(scene){updateCamera(dt);updateWorld(dt*.18);updateNotification(dt);drawMinimap();}
-  renderer.render(scene,camera);
-}
-
-async function init() {
-  try{
-    state.quality=localStorage.getItem('neon-bay-quality')||'high';
-    buildWorld();bindEvents();clock=new THREE.Clock();
-    dom.quality.value=state.quality;dom.continueBtn.disabled=!localStorage.getItem(CONFIG.saveKey);
-    await new Promise(r=>setTimeout(r,450));dom.loading.classList.remove('active');dom.menu.classList.add('active');
-    animate();
-  }catch(error){
-    console.error(error);dom.loading.innerHTML=`<div class="loading-card"><div class="eyebrow">STARTUP ERROR</div><h2 style="font-size:48px;margin:20px 0">Neon Bay could not start</h2><p>${String(error.message||error)}</p><p>Try enabling hardware acceleration or using a current Chrome, Edge, or Firefox browser.</p></div>`;
-  }
-}
-
-init();

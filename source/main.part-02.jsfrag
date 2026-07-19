@@ -1,72 +1,15 @@
-    const target = this.path[this.pathIndex];
-    const toTarget = tmpV.copy(target).sub(this.mesh.position);
-    if (toTarget.length() < 3) this.pathIndex = (this.pathIndex + 1) % this.path.length;
-    const desired = Math.atan2(-toTarget.x, -toTarget.z);
-    this.rotation = rotateToward(this.rotation, desired, this.turnSpeed * .55 * dt);
-    this.speed = lerp(this.speed, this.maxSpeed * .42, dt);
-    const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
-    const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
-    if (!collidesAt(nx, nz, 1.1)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
-    else { this.pathIndex = (this.pathIndex + 1) % this.path.length; this.speed *= .2; }
+  fireAtPlayer(distance, fromCover = false) {
+    const accuracy = clamp(1 - distance / 48 + (this.boss ? .2 : 0) - (fromCover ? .05 : 0), .2, .9);
+    if (random() < accuracy) damagePlayer(this.boss ? rand(9, 15) : rand(5, 10));
+    audio.tone(this.police ? 320 : 260, .07, 'square', .06, -100);
+    this.shootCooldown = this.boss ? .62 : rand(1.05, 2.05);
   }
-}
-
-class CharacterAI {
-  constructor(x, z, options = {}) {
-    this.police = !!options.police;
-    this.passive = !!options.passive;
-    this.boss = !!options.boss;
-    this.missionTarget = !!options.missionTarget;
-    this.alive = true;
-    this.health = options.health || (this.boss ? 250 : this.passive ? 25 : 70);
-    this.speed = options.speed || (this.boss ? 7 : this.passive ? 2.2 : 5.2);
-    this.shootCooldown = rand(.3, 1.2);
-    this.wanderAngle = rand(0, Math.PI * 2);
-    this.wanderTimer = rand(1, 4);
-    this.group = new THREE.Group();
-    const mainColor = this.police ? 0x2877d8 : this.passive ? [0xf0a44b, 0x4bd19d, 0x9b66e8][Math.floor(rand(0, 3))] : this.boss ? 0xffce45 : 0x8f284e;
-    const legs = makeBox(.55, .78, .38, this.police ? 0x11192b : 0x23253a, 0, .39, 0);
-    const torso = makeBox(.76, .92, .44, mainColor, 0, 1.16, 0);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(.29, 12, 9), material(0xb9795f)); head.position.y = 1.88;
-    this.group.add(legs, torso, head);
-    if (this.police) {
-      const badge = makeBox(.09, .11, .02, 0xffd95a, .18, 1.34, -.24);
-      this.group.add(badge);
-    }
-    if (this.boss) {
-      const coat = makeBox(.93, 1.05, .52, 0x141724, 0, 1.2, .05);
-      const chain = makeBox(.3, .06, .03, 0xffd24f, 0, 1.45, -.29);
-      this.group.add(coat, chain);
-      this.group.scale.setScalar(1.18);
-    }
-    this.group.position.set(x, 0, z);
-    this.group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.userData.entity = this; } });
-    scene.add(this.group);
-    if (this.passive) pedestrians.push(this); else enemies.push(this);
-  }
-  update(dt) {
-    if (!this.alive) return;
-    if (this.passive) return this.updateWander(dt);
-    const target = getPlayerPosition();
-    const offset = tmpV.copy(target).sub(this.group.position);
-    const distance = offset.length();
-    if (distance < 68 || this.police) {
-      this.group.rotation.y = Math.atan2(offset.x, offset.z);
-      if (distance > (this.boss ? 10 : 13)) {
-        offset.normalize();
-        const nx = this.group.position.x + offset.x * this.speed * dt;
-        const nz = this.group.position.z + offset.z * this.speed * dt;
-        if (!collidesAt(nx, nz, .45)) { this.group.position.x = nx; this.group.position.z = nz; }
-        else this.group.rotation.y += rand(-1.4, 1.4);
-      }
-      this.shootCooldown -= dt;
-      if (distance < (this.boss ? 34 : 27) && this.shootCooldown <= 0) {
-        const damage = this.boss ? rand(9, 15) : rand(5, 10);
-        damagePlayer(damage);
-        audio.tone(this.police ? 320 : 260, .07, 'square', .06, -100);
-        this.shootCooldown = this.boss ? .62 : rand(1.1, 2.1);
-      }
-    }
+  alert(position = getPlayerPosition()) {
+    if (this.passive || !this.alive) return;
+    this.alerted = true;
+    this.lastSeen.copy(position);
+    this.searchTimer = this.police ? 9 : 6;
+    if (this.aiState === 'idle') this.aiState = 'search';
   }
   updateWander(dt) {
     this.wanderTimer -= dt;
@@ -83,6 +26,7 @@ class CharacterAI {
   takeDamage(amount, vehicleHit = false) {
     if (!this.alive) return;
     this.health -= amount;
+    this.alert(getPlayerPosition());
     audio.hit();
     flashMesh(this.group, 0xffffff);
     if (!this.passive && !this.police) {
@@ -156,6 +100,7 @@ function buildWorld() {
   buildRoads();
   buildBuildings();
   buildDecorations();
+  coverPoints = buildCoverPoints(collisionBoxes);
   buildVehicles();
   buildPopulation();
   buildInteractables();
@@ -163,8 +108,82 @@ function buildWorld() {
   objectiveMarker = buildMarker(0xff3eb5);
   objectiveMarker.visible = false;
   player = createPlayer();
+  cinematic = new CinematicDirector({ root: dom.cinematic, speaker: dom.dialogueSpeaker, text: dom.dialogueText, skip: dom.dialogueSkip });
   updateLighting(0);
 }
 
 function buildRoads() {
   const roadMat = material(0x232733, .96);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd76b });
+  for (const c of CONFIG.roadCenters) {
+    const horizontal = new THREE.Mesh(new THREE.PlaneGeometry(360, CONFIG.roadWidth), roadMat);
+    horizontal.rotation.x = -Math.PI / 2; horizontal.position.set(0, .025, c); horizontal.receiveShadow = true; scene.add(horizontal);
+    const vertical = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.roadWidth, 360), roadMat);
+    vertical.rotation.x = -Math.PI / 2; vertical.position.set(c, .028, 0); vertical.receiveShadow = true; scene.add(vertical);
+    const hLine = new THREE.Mesh(new THREE.PlaneGeometry(360, .14), lineMat); hLine.rotation.x = -Math.PI/2; hLine.position.set(0,.04,c); scene.add(hLine);
+    const vLine = new THREE.Mesh(new THREE.PlaneGeometry(.14, 360), lineMat); vLine.rotation.x = -Math.PI/2; vLine.position.set(c,.041,0); scene.add(vLine);
+  }
+}
+
+function buildBuildings() {
+  const blocks = [-90, -30, 30, 90];
+  const palette = [0x3a4059, 0x5d3b56, 0x365464, 0x514c68, 0x6b4d3a, 0x2f4658];
+  let buildingIndex = 0;
+  for (const bx of blocks) for (const bz of blocks) {
+    if (bx > 88 || (bx === 30 && bz === -30)) continue;
+    const count = 2 + Math.floor(rand(0, 3));
+    for (let i = 0; i < count; i++) {
+      const w = rand(12, 22), d = rand(12, 22), h = rand(12, 54);
+      const x = bx + rand(-13, 13), z = bz + rand(-13, 13);
+      if (buildingIndex++ < 2) continue;
+      const building = makeBox(w, h, d, palette[Math.floor(rand(0, palette.length))], x, h / 2, z);
+      building.material.roughness = .82;
+      scene.add(building);
+      addCollider(x, z, w, d);
+      addWindows(building, w, h, d, buildingIndex);
+      if (random() > .72) addRoofSign(x, z, h, w, buildingIndex);
+    }
+  }
+  const named = [
+    [-142,-142,24,16,18,0x344257], [-94,-140,18,18,22,0x4c3552], [95,-98,24,22,20,0x33414d],
+    [95,96,28,24,18,0x4d3540], [-120,105,18,20,16,0x314a52], [30,150,32,20,24,0x40364f]
+  ];
+  named.forEach(([x,z,w,d,h,c], i) => {
+    const b = makeBox(w,h,d,c,x,h/2,z); scene.add(b); addCollider(x,z,w,d); addWindows(b,w,h,d,100+i);
+  });
+  buildOceanDriveBlock();
+}
+
+function buildOceanDriveBlock() {
+  const sidewalk = new THREE.Mesh(new THREE.PlaneGeometry(44,44), material(0xa7a0a8, .96));
+  sidewalk.rotation.x=-Math.PI/2; sidewalk.position.set(30,.055,-30); sidewalk.receiveShadow=true; scene.add(sidewalk);
+
+  const hotel=makeBox(16,28,25,0x332d4d,20,14,-31); scene.add(hotel); addCollider(20,-31,16,25); addWindows(hotel,16,28,25,211);
+  const hotelSign=makeBox(.65,7,.35,0xff3eb5,11.65,9,-31); hotelSign.material.emissive=new THREE.Color(0xff147f); hotelSign.material.emissiveIntensity=2.4; scene.add(hotelSign);
+  const canopy=makeBox(8,.35,3,0x21cde0,20,3.4,-17.5); canopy.material.emissive=new THREE.Color(0x0c9cad); canopy.material.emissiveIntensity=1.1; scene.add(canopy);
+
+  const diner=makeBox(13,7,12,0x31576a,41.5,3.5,-42); scene.add(diner); addCollider(41.5,-42,13,12);
+  const dinerAwning=makeBox(11,.35,2.2,0xffd45c,41.5,4.2,-35.4); scene.add(dinerAwning);
+  const dinerSign=makeBox(7,1.4,.25,0xff5f9d,41.5,6.2,-35.15); dinerSign.material.emissive=new THREE.Color(0xff287e); dinerSign.material.emissiveIntensity=2; scene.add(dinerSign);
+
+  const arcade=makeBox(13,9,12,0x4c315f,41.5,4.5,-18); scene.add(arcade); addCollider(41.5,-18,13,12);
+  const arcadeSign=makeBox(8,1.8,.25,0x40edff,41.5,7.5,-24.15); arcadeSign.material.emissive=new THREE.Color(0x1fd6ff); arcadeSign.material.emissiveIntensity=2.2; scene.add(arcadeSign);
+  for(let i=0;i<3;i++){const door=makeBox(2.3,3.2,.18,0x17233c,37.8+i*3.7,1.65,-24.25);scene.add(door);}
+
+  for(const [x,z] of [[10,-13],[50,-13],[10,-48],[50,-48]]){
+    const planter=makeBox(2.2,.7,2.2,0x654735,x,.35,z); scene.add(planter);
+    const palm=new THREE.Mesh(new THREE.ConeGeometry(1.5,3.8,7),material(0x2e9d66)); palm.position.set(x,2.5,z); scene.add(palm);
+  }
+  for(const [x,z,r] of [[30,-8,0],[8,-30,Math.PI/2],[52,-30,Math.PI/2]]){
+    const bench=makeBox(4,.25,.65,0x8a5d39,x,.7,z); bench.rotation.y=r; scene.add(bench);
+    const legA=makeBox(.2,.7,.2,0x252936,x+(r?0:1.4),.35,z+(r?1.4:0)); const legB=makeBox(.2,.7,.2,0x252936,x-(r?0:1.4),.35,z-(r?1.4:0)); scene.add(legA,legB);
+  }
+  const districtLabel=makeBox(13,.25,.65,0x252a36,30,.18,-6); districtLabel.material.emissive=new THREE.Color(0xff3eb5); districtLabel.material.emissiveIntensity=.9; scene.add(districtLabel);
+}
+
+function addWindows(building, w, h, d, seed) {
+  const countY = Math.max(1, Math.floor(h / 5));
+  const countX = Math.max(2, Math.floor(w / 4));
+  const colors = [0xffd271, 0x6ee6ff, 0xff74ca];
+  for (let y = 0; y < countY; y++) for (let x = 0; x < countX; x++) {
+    if (((x + y + seed) % 3) === 0) continue;

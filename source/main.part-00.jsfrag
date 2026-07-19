@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import './styles.css';
+import { WEAPONS, VEHICLE_SPECS, FIRST_RIDE_INTRO, FIRST_RIDE_CONTACT } from './modules/content.js';
+import { createPlayerModel, setPlayerWeapon, triggerPlayerRecoil, updatePlayerAnimation } from './modules/player-model.js';
+import { createVehicleModel, updateVehicleVisual } from './modules/vehicle-model.js';
+import { CinematicDirector } from './modules/cinematic.js';
+import { buildCoverPoints, chooseCoverPoint, moveToward2D } from './modules/combat-ai.js';
 
 const $ = (selector) => document.querySelector(selector);
 const clamp = THREE.MathUtils.clamp;
@@ -15,7 +20,9 @@ const dom = {
   ammo: $('#ammo-current'), reserve: $('#ammo-reserve'), weaponName: $('#weapon-name'), missionNumber: $('#mission-number'), missionTitle: $('#mission-title'),
   missionObjective: $('#mission-objective'), objectiveProgress: $('#objective-progress'), quality: $('#quality-select'), music: $('#music-toggle'),
   sfx: $('#sfx-toggle'), sensitivity: $('#sensitivity'), continueBtn: $('#continue-btn'), mobile: $('#mobile-controls'),
-  completeTitle: $('#complete-title'), completeSummary: $('#complete-summary'), completeReward: $('#complete-reward')
+  completeTitle: $('#complete-title'), completeSummary: $('#complete-summary'), completeReward: $('#complete-reward'),
+  cinematic: $('#cinematic-overlay'), dialogueSpeaker: $('#dialogue-speaker'), dialogueText: $('#dialogue-text'), dialogueSkip: $('#dialogue-skip'),
+  slotPistol: $('#slot-pistol'), slotShotgun: $('#slot-shotgun')
 };
 
 const CONFIG = {
@@ -57,7 +64,11 @@ const state = {
   musicEnabled: true,
   sfxEnabled: true,
   sensitivity: 1,
-  chapterComplete: false
+  chapterComplete: false,
+  weapon: 'pistol',
+  weaponAmmo: { pistol: { ammo: 12, reserve: 72 }, shotgun: { ammo: 6, reserve: 24 } },
+  cinematicShot: null,
+  cameraShake: 0
 };
 
 const input = {
@@ -79,6 +90,9 @@ let wantedSpawnTimer = 0;
 let saveTimer = 0;
 let worldTime = 0;
 let collisionBoxes = [];
+let coverPoints = [];
+let cinematic;
+let playerRig;
 let vehicles = [];
 let enemies = [];
 let pedestrians = [];
@@ -168,3 +182,67 @@ class AudioEngine {
     if (!this.ctx) return;
     const now = this.ctx.currentTime;
     this.musicNodes.forEach((node, i) => node.gain.gain.linearRampToValueAtTime(enabled ? (i === 0 ? .018 : .008) : 0, now + .25));
+  }
+}
+const audio = new AudioEngine();
+
+function seededRandom(seed) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+  return () => (value = value * 16807 % 2147483647) / 2147483647;
+}
+const random = seededRandom(96421);
+const rand = (min, max) => min + (max - min) * random();
+
+function material(color, roughness = .75, metalness = .05) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+}
+
+function makeBox(w, h, d, color, x = 0, y = h / 2, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = state.quality === 'high';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function addCollider(x, z, w, d, padding = .3) {
+  collisionBoxes.push({ minX: x - w / 2 - padding, maxX: x + w / 2 + padding, minZ: z - d / 2 - padding, maxZ: z + d / 2 + padding });
+}
+
+function collidesAt(x, z, radius = .55) {
+  const onPier = x >= 150 - radius && x <= 206 + radius && z >= 117 - radius && z <= 133 + radius;
+  if (x < -176 + radius || ((!onPier) && x > 155 - radius) || z < -176 + radius || z > 176 - radius) return true;
+  for (const box of collisionBoxes) {
+    if (x + radius > box.minX && x - radius < box.maxX && z + radius > box.minZ && z - radius < box.maxZ) return true;
+  }
+  return false;
+}
+
+function createPlayer() {
+  const group = createPlayerModel({ quality: state.quality });
+  group.position.set(-130, 0, -118);
+  scene.add(group);
+  playerVelocity = new THREE.Vector3();
+  playerRig = group.userData.rig;
+  return group;
+}
+
+class Vehicle {
+  constructor(id, x, z, color = 0xe23d88, rotation = 0, type = 'sport') {
+    this.id = id;
+    this.type = type;
+    const specKey = type === 'police' ? 'police' : type === 'van' ? 'van' : id === 'sunset' ? 'sunset' : id === 'ocean' ? 'ocean' : 'traffic';
+    this.spec = VEHICLE_SPECS[specKey];
+    const model = createVehicleModel({ id, type, color, quality: state.quality });
+    this.mesh = model.group;
+    this.model = model;
+    this.wheels = model.wheels;
+    this.speed = 0;
+    this.rotation = rotation;
+    this.health = 100;
+    this.maxSpeed = this.spec.maxSpeed;
+    this.acceleration = this.spec.acceleration;
+    this.turnSpeed = this.spec.steering;
+    this.occupied = false;
+    this.destroyed = false;

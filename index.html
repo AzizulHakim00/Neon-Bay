@@ -14,7 +14,7 @@
 
       <div id="loading-screen" class="screen active">
         <div class="loading-card">
-          <div class="eyebrow">ORIGINAL WEB GAME</div>
+          <div class="eyebrow">ORIGINAL WEB GAME · v1.1</div>
           <h1>NEON <span>BAY</span></h1>
           <p>Building the city…</p>
           <div class="loader"><i></i></div>
@@ -32,10 +32,11 @@
             <button id="new-game-btn">New Game</button>
             <button id="how-btn">How to Play</button>
             <button id="settings-btn">Settings</button>
+            <a class="menu-link" href="/trailer.html" target="_blank" rel="noopener">Watch v1.1 Trailer</a>
           </div>
           <p class="legal">Original characters, city, missions and procedural artwork. Desktop recommended.</p>
         </div>
-        <div class="menu-city-label">COASTLINE DISTRICT · 1996</div>
+        <div class="menu-city-label">COASTLINE DISTRICT · v1.1</div>
       </div>
 
       <div id="how-panel" class="modal hidden">
@@ -51,6 +52,7 @@
             <div><kbd>E</kbd><span>Interact / enter vehicle</span></div>
             <div><kbd>Click</kbd><span>Fire weapon</span></div>
             <div><kbd>R</kbd><span>Reload</span></div>
+            <div><kbd>1 / 2 / Q</kbd><span>Switch weapon</span></div>
             <div><kbd>Esc</kbd><span>Pause</span></div>
           </div>
           <p>Follow the colored mission marker. Shops and services use their own icons on the minimap.</p>
@@ -79,6 +81,7 @@
           <div id="weapon-card" class="weapon-card hud-card">
             <span id="weapon-name">9MM PISTOL</span>
             <strong><b id="ammo-current">12</b><small>/</small><b id="ammo-reserve">72</b></strong>
+            <div class="weapon-slots"><i id="slot-pistol" class="active">1</i><i id="slot-shotgun">2</i></div>
           </div>
         </div>
 
@@ -133,12 +136,23 @@
         </div>
       </div>
 
+      <div id="cinematic-overlay" class="cinematic-overlay hidden">
+        <div class="cinematic-bar top"></div>
+        <div class="dialogue-panel">
+          <span id="dialogue-speaker">MARA VELEZ</span>
+          <p id="dialogue-text">Welcome to Neon Bay.</p>
+          <small id="dialogue-skip"></small>
+        </div>
+        <div class="cinematic-bar bottom"></div>
+      </div>
+
       <div id="mobile-controls" class="hidden">
         <div id="joystick" class="joystick"><i id="joystick-knob"></i></div>
         <div class="mobile-buttons">
           <button data-action="fire">FIRE</button>
           <button data-action="jump">JUMP</button>
           <button data-action="interact">USE</button>
+          <button data-action="swap">SWAP</button>
         </div>
       </div>
     </div>

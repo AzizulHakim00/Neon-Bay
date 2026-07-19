@@ -141,3 +141,11 @@ kbd { border:1px solid rgba(255,255,255,.25); border-bottom-width:3px; border-ra
   .interaction { bottom:150px; }
   .weapon-card { display:none; }
 }
+
+/* v1.1 cinematic dialogue and weapon switching */
+.weapon-slots{display:flex;gap:6px;margin-top:7px}.weapon-slots i{font-style:normal;width:24px;height:20px;border:1px solid rgba(255,255,255,.2);display:grid;place-items:center;font-size:11px;color:#8f9bb7;background:rgba(0,0,0,.22)}.weapon-slots i.active{color:#fff;border-color:#ff3eb5;box-shadow:0 0 12px rgba(255,62,181,.38)}
+.cinematic-overlay{position:fixed;inset:0;z-index:30;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between}.cinematic-overlay.hidden{display:none}.cinematic-bar{height:7.5vh;background:#020309;transition:height .35s ease}.cinematic-overlay:not(.cutscene) .cinematic-bar{height:0}.dialogue-panel{align-self:center;margin-bottom:8.5vh;width:min(720px,86vw);padding:16px 22px 18px;background:linear-gradient(90deg,rgba(5,8,18,.94),rgba(18,15,34,.88));border-left:4px solid #ff3eb5;box-shadow:0 18px 50px rgba(0,0,0,.48);backdrop-filter:blur(12px)}.dialogue-panel span{font-size:12px;letter-spacing:.22em;color:#42e8ff;font-weight:800}.dialogue-panel p{margin:7px 0 0;font-size:21px;line-height:1.35;color:#f4f6ff}.dialogue-panel small{display:block;margin-top:8px;text-align:right;color:#8d98b3;letter-spacing:.14em;font-size:9px}
+.capture-badge{position:fixed;right:24px;bottom:22px;z-index:40;padding:8px 12px;border:1px solid rgba(255,255,255,.22);background:rgba(4,8,18,.7);font-size:10px;letter-spacing:.18em;color:#fff}
+@media(max-width:700px){.dialogue-panel{margin-bottom:16vh;padding:12px 15px}.dialogue-panel p{font-size:16px}.weapon-slots{display:none}}
+
+.menu-link{display:block;text-align:center;text-decoration:none;color:#fff;border:1px solid rgba(255,255,255,.22);padding:13px 18px;border-radius:8px;font-weight:800;letter-spacing:.05em;background:rgba(6,10,23,.55)}.menu-link:hover{border-color:#ff3eb5;background:rgba(255,62,181,.12)}

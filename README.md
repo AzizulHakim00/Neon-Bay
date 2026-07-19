@@ -1,33 +1,53 @@
-# Neon Bay
+# Neon Bay v1.1
 
-**Neon Bay** is an original browser-based 3D open-city action game built with Three.js, JavaScript and Vite. It takes inspiration from the broad open-world action genre while using original characters, missions, city design, branding, procedural artwork and synthesized audio.
+**Neon Bay** is an original browser-based 3D open-city action game built with Three.js, modular JavaScript and Vite. Chapter One contains five connected jobs, driving, combat, police pursuit, shops, saving, dynamic weather and desktop/mobile controls.
 
-## Playable Chapter One
+Version 1.1 focuses on presentation and game feel: an articulated player, distinct vehicle models and handling, shotgun combat, tactical enemy behavior, a redesigned city block and a cinematic opening mission.
 
-The included campaign is a complete five-job vertical slice:
+## v1.1 trailer
 
-1. **First Ride** — meet a contact, take the Sunset GT and deliver it to a garage.
-2. **Beach Exchange** — survive an ambush, gain police attention and escape to the marina.
-3. **Hot Delivery** — collect a package, secure a vehicle and beat a timed police pursuit.
+[Watch the browser-based Neon Bay v1.1 trailer](public/trailer.html)
+
+> The release media is an original promotional visualization of the game’s low-poly art direction. It is not presented as a GPU-recorded gameplay capture.
+
+[![Neon Bay v1.1 trailer preview](public/media/neon-bay-ocean-drive.svg)](public/trailer.html)
+
+## What changed in v1.1
+
+- Articulated player model with idle, walking, sprinting, jumping, aiming and recoil poses
+- Three redesigned vehicles: Sunset GT, Oceanic Coupe and Harbor Van
+- Vehicle-specific speed, acceleration, braking, mass, steering, grip and drift behavior
+- Animated front-wheel steering, suspension movement, body roll and brake lights
+- Pistol and pump-shotgun weapon switching with separate ammunition and reload rules
+- Enemy alert, search, attack and cover states
+- Redesigned Ocean Drive block with a hotel, diner, arcade, awnings, benches, planters and neon signs
+- First Ride opening cutscene and character dialogue
+- Versioned save data that remembers the selected weapon and both ammunition inventories
+- Modular source structure for player models, vehicles, content, cinematics and combat AI
+- Dedicated module tests in addition to the existing smoke and mission-flow suites
+- Six editable vector release screenshots and a browser-based animated trailer
+
+## Promotional gallery
+
+| Ocean Drive | Vehicle lineup |
+|---|---|
+| ![Ocean Drive](public/media/neon-bay-ocean-drive.svg) | ![Vehicle lineup](public/media/neon-bay-vehicle-lineup.svg) |
+
+| Driving physics | Shotgun combat |
+|---|---|
+| ![Driving](public/media/neon-bay-driving-physics.svg) | ![Combat](public/media/neon-bay-shotgun-combat.svg) |
+
+| First Ride dialogue | Police chase |
+|---|---|
+| ![Dialogue](public/media/neon-bay-first-ride-dialogue.svg) | ![Police chase](public/media/neon-bay-police-chase.svg) |
+
+## Chapter One
+
+1. **First Ride** — meet Mara, take the Sunset GT and deliver it to the Coastline garage.
+2. **Beach Exchange** — survive an ambush, attract police attention and escape to the marina.
+3. **Hot Delivery** — secure a package and beat a timed pursuit to the safehouse.
 4. **Warehouse Trouble** — clear a warehouse yard, recover a ledger and return it safely.
-5. **District Boss** — defeat the district boss and guards, then escape across the pier.
-
-## Included systems
-
-- Procedural coastal city with roads, buildings, beach, ocean, pier, palms, streetlights and neon signs
-- Third-person walking, sprinting, jumping and camera control
-- Three enterable vehicles with acceleration, steering, reverse, boost, handbrake, collision damage and repair
-- Ambient traffic and pedestrians
-- Pistol shooting, magazine/reload logic, ammunition purchases and hit detection
-- Enemy AI with pursuit, ranged attacks, health and boss behavior
-- Five-star wanted system, police officers, police cruisers, pursuit and escape logic
-- Health, armor, stamina, money, shops, clinic and garage services
-- Dynamic day/night lighting, rain and overcast weather
-- Mission HUD, objective markers, notifications, minimap, speedometer, pause, game-over and mission-complete screens
-- Local browser save/continue system and automatic saves
-- High, medium and low graphics settings
-- Keyboard/mouse and touch/mobile controls
-- Procedurally synthesized sound effects and ambient music; no copyrighted audio assets
+5. **District Boss** — defeat the boss and guards, then escape across the pier.
 
 ## Controls
 
@@ -40,18 +60,22 @@ The included campaign is a complete five-job vertical slice:
 | Enter, exit or interact | `E` |
 | Shoot | Left mouse button |
 | Reload | `R` |
+| Select pistol / shotgun | `1` / `2` |
+| Cycle weapon | `Q` |
 | Pause | `Esc` |
+
+Touch controls include movement, camera look, fire, jump, interaction and weapon swapping.
 
 ## Run locally
 
-Requirements: Node.js 20 or newer. Node.js 22 is recommended.
+Node.js 20 or newer is required. Node.js 22 is recommended.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite, normally `http://localhost:5173`.
+Open the URL shown by Vite, normally `http://localhost:5173`.
 
 ## Validate and build
 
@@ -59,60 +83,60 @@ Open the local URL printed by Vite, normally `http://localhost:5173`.
 npm test
 ```
 
-This runs JavaScript syntax validation, menu/save/pause smoke tests, all five mission-flow tests, collision reachability tests, and the production Vite build. The deployable site is generated in `dist/`.
+The test command runs:
 
-To preview it:
+- JavaScript syntax validation
+- Player, vehicle, weapon, cover-AI and cinematic module tests
+- Menu, save and pause/resume smoke tests
+- All five mission-flow tests
+- Mission checkpoint collision-reachability checks
+- The Vite production build
 
-```bash
-npm run preview
+The deployable website is generated in `dist/`.
+
+## Source architecture
+
+```text
+source/
+├── main.part-00.jsfrag
+├── ...
+└── main.part-07.jsfrag
+src/
+├── styles.css
+└── modules/
+    ├── cinematic.js
+    ├── combat-ai.js
+    ├── content.js
+    ├── player-model.js
+    └── vehicle-model.js
 ```
 
-## Deploy
+The reusable gameplay systems are real ES modules. The world-orchestration entry file is kept in ordered readable source sections and assembled into `src/main.js` automatically before development, validation and production builds. This keeps repository uploads reliable while preserving normal module imports and a single Vite entrypoint.
+
+## Deployment
 
 ### Vercel
 
-Import this repository into Vercel. The included `vercel.json` runs `npm run build` and publishes `dist`. Every future push to `main` can redeploy automatically.
+Import the repository into Vercel. The included `vercel.json` selects Vite, runs `npm run build` and publishes `dist`. Future pushes to `main` can deploy automatically.
 
 ### GitHub Pages
 
-1. Open **Settings → Pages** in this repository.
-2. Under **Build and deployment**, select **GitHub Actions**.
-3. Push a commit or run the included workflow manually.
+The included workflow runs the complete test suite and deploys the Vite output.
 
-The workflow installs dependencies, executes the full test suite, builds the game and deploys `dist`.
+1. Open **Settings → Pages**.
+2. Choose **GitHub Actions** under Build and deployment.
+3. Push a commit or manually run the Pages workflow.
 
 ### Netlify
 
-Import the repository into Netlify. The included `netlify.toml` supplies the build command, publish directory and Node version.
+The included `netlify.toml` defines the production build command, output directory and Node version.
 
-## Project structure
+## Release media
 
-```text
-Neon-Bay/
-├── .github/workflows/deploy-pages.yml
-├── public/
-│   └── favicon.svg
-├── scripts/
-│   ├── assemble-main.mjs
-│   ├── mission-test.mjs
-│   └── smoke-test.mjs
-├── source/
-│   ├── main.part-00.jsfrag
-│   ├── ...
-│   └── main.part-06.jsfrag
-├── src/
-│   └── styles.css
-├── index.html
-├── package.json
-├── vite.config.js
-├── vercel.json
-└── netlify.toml
-```
+The repository includes six editable SVG promotional screenshots and an 18-second browser-based animated trailer. The downloadable source package also contains PNG exports and an MP4 trailer.
 
-## Repository source assembly
+## Legal and scope
 
-The game logic is stored as ordered text fragments under `source/`. `npm run dev`, `npm run build`, and `npm test` automatically assemble them into `src/main.js`. The generated file is intentionally ignored by Git.
+All characters, branding, missions, procedural artwork and synthesized audio are original to this project. The game takes inspiration from the general open-world action genre but does not use copied GTA maps, characters, music, logos, dialogue or other proprietary assets.
 
-## Scope
-
-This is a complete browser-game chapter and reusable foundation, not a GTA-sized commercial production. A commercial-scale open world would require a larger team, dedicated 3D assets, animation capture, voice acting, extensive QA and significantly more development time. The foundation can be extended with additional districts, missions, vehicles, weapons and NPC systems.
+This is a polished browser-game vertical slice, not a commercial GTA-sized production. Expanding to a large open world would require dedicated artists, animators, audio production, extensive QA and a larger development team.

@@ -1,0 +1,53 @@
+  const move=e=>{if(e.pointerId!==activeId)return;const r=joystick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const len=Math.hypot(dx,dy),max=r.width*.34;if(len>max){dx=dx/len*max;dy=dy/len*max;}knob.style.transform=`translate(${dx}px,${dy}px)`;input.mobileX=dx/max;input.mobileY=dy/max;};
+  joystick.addEventListener('pointerdown',e=>{activeId=e.pointerId;joystick.setPointerCapture(e.pointerId);move(e);});joystick.addEventListener('pointermove',move);
+  const end=e=>{if(e.pointerId!==activeId)return;activeId=null;knob.style.transform='';input.mobileX=0;input.mobileY=0;};joystick.addEventListener('pointerup',end);joystick.addEventListener('pointercancel',end);
+  document.querySelectorAll('.mobile-buttons button').forEach(btn=>{
+    btn.addEventListener('pointerdown',e=>{e.preventDefault();const a=btn.dataset.action;if(a==='fire')shoot();if(a==='jump')input.jumpQueued=true;if(a==='interact')input.interactQueued=true;if(a==='swap')cycleWeapon();});
+  });
+  let lookId=null,lastX=0,lastY=0;
+  dom.canvas.addEventListener('pointerdown',e=>{if(!isTouch||e.clientX<innerWidth*.35)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;cameraYaw-=(e.clientX-lastX)*.008*state.sensitivity;cameraPitch=clamp(cameraPitch-(e.clientY-lastY)*.006*state.sensitivity,-.75,.32);lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null;});
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  cinematic?.update(dt);
+  if(state.running&&!state.paused&&!state.gameOver){
+    updatePlayer(dt);updateAI(dt);updateCamera(dt);updateMission(dt);updateWanted(dt);updateWorld(dt);updateInteractions();updateNotification(dt);updateHUD();drawMinimap();
+    if(input.fire)shoot();saveTimer+=dt;if(saveTimer>30){saveTimer=0;saveGame(true);}
+  } else if(scene){updateCamera(dt);updateWorld(dt*.18);updateNotification(dt);drawMinimap();}
+  renderer.render(scene,camera);
+}
+
+function configureCaptureMode(mode) {
+  if(!mode)return;
+  cinematic?.finish();state.cinematicShot=null;state.running=true;state.paused=false;
+  hideAllScreens();dom.hud.classList.remove('hidden');dom.mobile.classList.add('hidden');
+  const badge=document.createElement('div');badge.className='capture-badge';badge.textContent='NEON BAY · v1.1';document.body.appendChild(badge);
+  if(mode==='city'){player.position.set(28,0,-5);cameraYaw=2.45;cameraPitch=-.25;state.timeOfDay=19.1;}
+  if(mode==='vehicles'){
+    player.position.set(30,0,-7);getVehicle('sunset').mesh.position.set(14,0,-7);getVehicle('sunset').rotation=Math.PI/2;getVehicle('ocean').mesh.position.set(29,0,-7);getVehicle('ocean').rotation=Math.PI/2;getVehicle('van').mesh.position.set(44,0,-7);getVehicle('van').rotation=Math.PI/2;cameraYaw=2.95;cameraPitch=-.16;state.timeOfDay=18.65;
+  }
+  if(mode==='drive'){const v=getVehicle('sunset');v.mesh.position.set(-12,0,-60);v.rotation=-Math.PI/2;enterVehicle(v);v.speed=24;cameraYaw=Math.PI/2;cameraPitch=-.22;state.timeOfDay=19.35;}
+  if(mode==='combat'){player.position.set(85,0,105);switchWeapon('shotgun');spawnEnemiesAround(new THREE.Vector3(98,0,112),5,false);enemies.forEach(e=>e.alert(player.position));cameraYaw=-.8;cameraPitch=-.14;state.timeOfDay=20.4;}
+  if(mode==='mission'){player.position.set(-118,0,-136);cameraYaw=2.25;cameraPitch=-.18;state.timeOfDay=18.8;playFirstRideContact();}
+  if(mode==='night'){player.position.set(132,0,-132);cameraYaw=-2.35;cameraPitch=-.2;state.timeOfDay=22.1;state.weather='RAIN';}
+  updateMissionObjective(true);updateHUD();
+}
+
+async function init() {
+  try{
+    state.quality=localStorage.getItem('neon-bay-quality')||'high';
+    buildWorld();bindEvents();clock=new THREE.Clock();
+    dom.quality.value=state.quality;dom.continueBtn.disabled=!localStorage.getItem(CONFIG.saveKey);
+    await new Promise(r=>setTimeout(r,450));dom.loading.classList.remove('active');dom.menu.classList.add('active');
+    const captureMode=globalThis.__CAPTURE_MODE||new URLSearchParams(location.search).get('capture');if(captureMode){newGame();configureCaptureMode(captureMode);}
+    animate();
+  }catch(error){
+    console.error(error);dom.loading.innerHTML=`<div class="loading-card"><div class="eyebrow">STARTUP ERROR</div><h2 style="font-size:48px;margin:20px 0">Neon Bay could not start</h2><p>${String(error.message||error)}</p><p>Try enabling hardware acceleration or using a current Chrome, Edge, or Firefox browser.</p></div>`;
+  }
+}
+
+init();
