@@ -1,0 +1,92 @@
+name: Retry Vercel after build rate limit
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: read
+
+concurrency:
+  group: neon-bay-vercel-retry
+  cancel-in-progress: false
+
+jobs:
+  retry-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Inspect latest Vercel status
+        id: vercel
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sha="$(git rev-parse HEAD)"
+          response="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/status")"
+          latest="$(jq -c '[.statuses[] | select(.context == "Vercel")] | sort_by(.updated_at) | last // {}' <<<"$response")"
+          state="$(jq -r '.state // "missing"' <<<"$latest")"
+          target="$(jq -r '.target_url // ""' <<<"$latest")"
+          description="$(jq -r '.description // ""' <<<"$latest")"
+
+          echo "Commit: ${sha}"
+          echo "Vercel state: ${state}"
+          echo "Vercel target: ${target}"
+          echo "Vercel description: ${description}"
+
+          retry=false
+          case "$state" in
+            success)
+              echo "Production deployment is successful. Automatic retries will stop."
+              ;;
+            pending)
+              echo "A Vercel deployment is already running. No retry is needed."
+              ;;
+            failure)
+              combined="${target} ${description}"
+              if grep -Eqi 'build-rate-limit|rate.?limit|upgradeToPro' <<<"$combined"; then
+                retry=true
+                echo "Vercel is blocked by its build-rate limit. A fresh Git deployment will be triggered."
+              else
+                echo "Vercel failed for a reason other than the rate limit. Refusing endless retries."
+                exit 1
+              fi
+              ;;
+            missing)
+              commit_time="$(git show -s --format=%ct HEAD)"
+              now="$(date +%s)"
+              age="$((now - commit_time))"
+              if (( age >= 1200 )); then
+                retry=true
+                echo "No Vercel status appeared after 20 minutes. Triggering one fresh deployment attempt."
+              else
+                echo "The commit is recent; waiting for Vercel to attach its status."
+              fi
+              ;;
+            *)
+              echo "Unknown Vercel state: ${state}"
+              exit 1
+              ;;
+          esac
+
+          echo "retry=${retry}" >> "$GITHUB_OUTPUT"
+
+      - name: Trigger a fresh Vercel Git deployment
+        if: steps.vercel.outputs.retry == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "neon-bay-deploy-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --allow-empty -m "chore: retry Vercel production deployment"
+          git push origin HEAD:main
