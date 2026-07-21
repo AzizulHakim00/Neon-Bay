@@ -1,0 +1,30 @@
+  if(state.wanted>0){ctx.strokeStyle='rgba(55,142,255,.55)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(state.wantedLastKnown.x*scale,state.wantedLastKnown.z*scale,9*scale,0,Math.PI*2);ctx.stroke();}
+  interactables.forEach(i=>{ctx.fillStyle=`#${i.color.toString(16).padStart(6,'0')}`;ctx.fillRect(i.position.x*scale-2,i.position.z*scale-2,4,4);});
+  vehicles.filter(v=>!v.destroyed).forEach(v=>{ctx.fillStyle=v.type==='police'?'#3287ff':'#e6eaf2';ctx.fillRect(v.mesh.position.x*scale-1.5,v.mesh.position.z*scale-1.5,3,3);});
+  enemies.filter(e=>e.alive).forEach(e=>{ctx.fillStyle=e.police?'#338cff':'#ff4f62';ctx.beginPath();ctx.arc(e.group.position.x*scale,e.group.position.z*scale,2,0,Math.PI*2);ctx.fill();});
+  const p=getPlayerPosition();const rot=state.activeVehicle?state.activeVehicle.rotation:player.rotation.y;
+  ctx.translate(p.x*scale,p.z*scale);ctx.rotate(-rot);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,6);ctx.lineTo(0,3);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
+  const vignette=ctx.createRadialGradient(w/2,h/2,w*.25,w/2,h/2,w*.5);vignette.addColorStop(0,'rgba(0,0,0,0)');vignette.addColorStop(1,'rgba(0,0,0,.55)');ctx.fillStyle=vignette;ctx.fillRect(0,0,w,h);
+}
+
+function notify(message,duration=2) {
+  dom.notification.textContent=message;dom.notification.classList.remove('hidden');notificationTimer=duration;
+}
+
+function updateNotification(dt) {
+  if(notificationTimer>0){notificationTimer-=dt;if(notificationTimer<=0)dom.notification.classList.add('hidden');}
+}
+
+function saveGame(silent=false) {
+  if(!player)return;
+  state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;
+  const p=getPlayerPosition();
+  const data={version:4,currentMission:state.currentMission,missionStep:state.missionStep,cash:state.cash,health:state.health,armor:state.armor,weapon:state.weapon,weaponData:state.weaponData,ownedWeapons:{...state.ownedWeapons},timeOfDay:state.timeOfDay,position:{x:p.x,z:p.z},chapterComplete:state.chapterComplete,storyComplete:state.storyComplete,firstRideCinematicSeen:state.firstRideCinematicSeen,progression:progression.serialize(),businessEmpire:businessEmpire.serialize(),vehicleUpgrades:{...state.vehicleUpgrades},territoryControl:{...state.territoryControl},radioStation:state.radioStation,outfitIndex:state.outfitIndex};
+  localStorage.setItem(CONFIG.saveKey,JSON.stringify(data));dom.continueBtn.disabled=false;if(!silent)notify('Game saved.',1.5);
+}
+
+function loadGame() {
+  const raw=localStorage.getItem(CONFIG.saveKey)||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey);if(!raw)return false;
+  try{
+    const d=JSON.parse(raw);state.cash=d.cash??500;state.health=d.health??100;state.armor=d.armor??25;state.timeOfDay=d.timeOfDay??18.3;state.chapterComplete=!!d.chapterComplete;state.storyComplete=!!d.storyComplete;state.firstRideCinematicSeen=d.firstRideCinematicSeen??true;
+    progression=new ProgressionSystem(d.progression||{});businessEmpire=new BusinessEmpire(d.businessEmpire||{});state.vehicleUpgrades={engine:0,brakes:0,grip:0,...d.vehicleUpgrades};state.ownedWeapons={pistol:true,shotgun:true,smg:false,...d.ownedWeapons};state.territoryControl={...state.territoryControl,...d.territoryControl};state.radioStation=d.radioStation||0;state.outfitIndex=d.outfitIndex||0;
