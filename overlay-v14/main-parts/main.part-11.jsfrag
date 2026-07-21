@@ -1,0 +1,12 @@
+    dialogue=new DialogueSystem({root:dom.cinematic,speaker:dom.dialogueSpeaker,text:dom.dialogueText,skipButton:dom.skipCinematic,voiceEnabled:()=>state.voiceEnabled});
+    bindEvents();clock=new THREE.Clock();
+    if(dom.quality) dom.quality.value=state.quality;if(dom.voice) dom.voice.checked=state.voiceEnabled;dom.continueBtn.disabled=!(localStorage.getItem(CONFIG.saveKey)||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey));
+    await new Promise(r=>setTimeout(r,450));dom.loading.classList.remove('active');
+    if(state.demoMode)startDemoMode();else dom.menu.classList.add('active');
+    animate();
+  }catch(error){
+    console.error(error);dom.loading.innerHTML=`<div class="loading-card"><div class="eyebrow">STARTUP ERROR</div><h2 style="font-size:48px;margin:20px 0">Neon Bay could not start</h2><p>${String(error.message||error)}</p><p>Try enabling hardware acceleration or using a current Chrome, Edge, or Firefox browser.</p></div>`;
+  }
+}
+
+init();
