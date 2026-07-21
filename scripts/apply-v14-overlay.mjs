@@ -16,15 +16,21 @@ for (const [relativePath, expected] of Object.entries(manifest)) {
   if (actual !== expected) throw new Error(`Neon Bay v1.4 overlay checksum mismatch: ${relativePath}`);
 }
 
+const preserve = new Set(['package.json', 'package-lock.json', 'vercel.json']);
+let copied = 0;
+
 const copyTree = (sourceDir, relative = '') => {
   for (const entry of fs.readdirSync(path.join(sourceDir, relative), { withFileTypes: true })) {
     const next = path.join(relative, entry.name);
     if (entry.isDirectory()) copyTree(sourceDir, next);
     else {
+      const normalized = next.split(path.sep).join('/');
+      if (preserve.has(normalized)) continue;
       const target = path.resolve(root, next);
       if (!target.startsWith(`${root}${path.sep}`)) throw new Error(`Unsafe overlay path: ${next}`);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.copyFileSync(path.join(sourceDir, next), target);
+      copied += 1;
     }
   }
 };
@@ -38,4 +44,4 @@ const main = fs.readdirSync(path.join(overlayRoot, 'main-parts'))
 fs.mkdirSync(path.join(root, 'src'), { recursive: true });
 fs.writeFileSync(path.join(root, 'src/main.js'), main, 'utf8');
 
-console.log(`Applied Neon Bay 1.4.0 readable overlay: ${Object.keys(manifest).length} verified files`);
+console.log(`Applied Neon Bay 1.4.0 readable overlay: ${Object.keys(manifest).length} verified files, ${copied} copied files`);
