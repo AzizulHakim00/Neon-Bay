@@ -1,0 +1,65 @@
+  dom.completeReward.textContent=`+$${mission.reward.toLocaleString()}`;
+  const chapterOneFinished=state.currentMission===4;
+  const storyFinished=state.currentMission===MISSIONS.length-1;
+  $('#next-mission-btn').textContent=storyFinished?'Finish Story':chapterOneFinished?'Start Chapter Two':'Continue';
+  showScreen(dom.complete);
+  if(chapterOneFinished){state.chapterComplete=true;localStorage.setItem('neon-bay-chapter-complete','1');state.territoryControl['ocean-drive']=70;}
+  if(storyFinished){state.storyComplete=true;state.territoryControl['ocean-drive']=100;state.territoryControl['vice-point']=85;state.territoryControl.harbor=80;state.territoryControl.downtown=75;localStorage.setItem('neon-bay-story-complete','1');}
+  saveGame(true);
+}
+
+function failMission(reason='Mission failed.') {
+  if(state.gameOver) return;
+  state.gameOver=true;state.running=false;
+  notify(reason,2.5);
+  setTimeout(()=>{
+    state.cash=Math.max(0,state.cash-200);
+    showScreen(dom.gameOver);
+  },800);
+}
+
+function spawnEnemiesAround(center,count,police=false) {
+  for(let i=0;i<count;i++){
+    const angle=i/count*Math.PI*2+rand(-.3,.3),radius=rand(8,16);
+    const x=center.x+Math.cos(angle)*radius,z=center.z+Math.sin(angle)*radius;
+    let sx=x, sz=z;
+    for(let attempt=0; attempt<8 && collidesAt(sx,sz,.5); attempt++){
+      const a2=rand(0,Math.PI*2), r2=rand(7,18); sx=center.x+Math.cos(a2)*r2; sz=center.z+Math.sin(a2)*r2;
+    }
+    new CharacterAI(sx,sz,{police,health:police?85:70,missionTarget:!police});
+  }
+}
+
+function clearMissionEnemies() {
+  enemies.forEach(e=>scene?.remove(e.group)); enemies=[];
+  policeCruisers.forEach(v=>{scene?.remove(v.mesh);vehicles=vehicles.filter(x=>x!==v);}); policeCruisers=[];
+}
+
+function updatePlayer(dt) {
+  if (!player || state.activeVehicle || !state.running || state.paused || state.gameOver) return;
+  const forward=inputAxis('forward'),turn=inputAxis('turn');
+  const moving=Math.abs(forward)>.03||Math.abs(turn)>.03;
+  const sprint=(input.keys.has('ShiftLeft')||input.keys.has('ShiftRight'))&&state.stamina>2&&forward>.1;
+  const speed=sprint?CONFIG.sprintSpeed:CONFIG.playerSpeed;
+  if(sprint)state.stamina=Math.max(0,state.stamina-dt*24);else state.stamina=Math.min(100,state.stamina+dt*(moving?9:16));
+  const fwd=tmpV.set(-Math.sin(cameraYaw),0,-Math.cos(cameraYaw));
+  const right=tmpV2.set(Math.cos(cameraYaw),0,-Math.sin(cameraYaw));
+  const move=new THREE.Vector3().addScaledVector(fwd,forward).addScaledVector(right,turn);
+  if(move.lengthSq()>1)move.normalize();
+  if(move.lengthSq()>.01){
+    player.rotation.y=Math.atan2(move.x,move.z);
+    const nx=player.position.x+move.x*speed*dt,nz=player.position.z+move.z*speed*dt;
+    if(!collidesAt(nx,player.position.z,.52))player.position.x=nx;
+    if(!collidesAt(player.position.x,nz,.52))player.position.z=nz;
+  }
+  if((input.jumpQueued||input.keys.has('Space'))&&player.position.y<=.001){playerVelocity.y=CONFIG.jumpVelocity;audio.tone(180,.08,'triangle',.06,80);}
+  input.jumpQueued=false;
+  playerVelocity.y-=CONFIG.gravity*dt;
+  player.position.y+=playerVelocity.y*dt;
+  if(player.position.y<0){player.position.y=0;playerVelocity.y=0;}
+  const desiredAnimation = player.position.y > .08 ? 'Run' : sprint ? 'Run' : moving ? 'Walk' : (input.aim ? 'Aim' : 'Idle');
+  playerActor?.setWeapon(state.weapon);
+  playerActor?.update(dt, desiredAnimation);
+}
+
+function inputAxis(kind) {
