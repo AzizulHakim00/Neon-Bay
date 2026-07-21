@@ -1,0 +1,253 @@
+import * as THREE from 'three';
+import './styles.css';
+import { ActorLibrary, ACTOR_PALETTES } from './modules/actor-system.js';
+import { DialogueSystem, FIRST_RIDE_DIALOGUE } from './modules/dialogue-system.js';
+import { InteriorSystem } from './modules/interior-system.js';
+import { attachVehicleDamage, applyVehicleImpact, updateVehicleDamage, resetVehicleDamage } from './modules/vehicle-damage.js';
+import { buildRoadRoutes, makeSidewalkRoutine, trafficLightState, wantedProfile, ProgressionSystem, SIDE_ACTIVITY_DEFINITIONS } from './modules/living-city.js';
+import { DemoDirector } from './modules/demo-director.js';
+import { RADIO_STATIONS, DISTRICTS, districtAt, BUSINESS_DEFINITIONS, BusinessEmpire, CHAPTER_TWO_MISSIONS } from './modules/vice-coast.js';
+
+const $ = (selector) => document.querySelector(selector);
+const clamp = THREE.MathUtils.clamp;
+const lerp = THREE.MathUtils.lerp;
+const isTouch = matchMedia('(hover: none), (pointer: coarse)').matches;
+
+const dom = {
+  canvas: $('#game-canvas'), loading: $('#loading-screen'), menu: $('#main-menu'), hud: $('#hud'), pause: $('#pause-menu'),
+  complete: $('#mission-complete'), gameOver: $('#game-over'), interaction: $('#interaction'), interactionText: $('#interaction-text'),
+  notification: $('#notification'), crosshair: $('#crosshair'), minimap: $('#minimap'), speedometer: $('#speedometer'), speedText: $('#speed-text'),
+  healthBar: $('#health-bar'), armorBar: $('#armor-bar'), staminaBar: $('#stamina-bar'), healthText: $('#health-text'), armorText: $('#armor-text'),
+  staminaText: $('#stamina-text'), cash: $('#cash-text'), wanted: $('#wanted'), clock: $('#clock-text'), weather: $('#weather-text'),
+  ammo: $('#ammo-current'), reserve: $('#ammo-reserve'), weaponName: $('#weapon-name'), missionNumber: $('#mission-number'), missionTitle: $('#mission-title'),
+  missionObjective: $('#mission-objective'), objectiveProgress: $('#objective-progress'), quality: $('#quality-select'), music: $('#music-toggle'),
+  sfx: $('#sfx-toggle'), sensitivity: $('#sensitivity'), continueBtn: $('#continue-btn'), mobile: $('#mobile-controls'),
+  completeTitle: $('#complete-title'), completeSummary: $('#complete-summary'), completeReward: $('#complete-reward'),
+  voice: $('#voice-toggle'), cinematic: $('#cinematic'), dialogueSpeaker: $('#dialogue-speaker'), dialogueText: $('#dialogue-text'),
+  skipCinematic: $('#skip-cinematic-btn'), interiorLabel: $('#interior-label'), demoCaption: $('#demo-caption'),
+  wantedStatus: $('#wanted-status'), repText: $('#rep-text'), repTier: $('#rep-tier'), repProgress: $('#rep-progress'),
+  activityCard: $('#activity-card'), activityTitle: $('#activity-title'), activityObjective: $('#activity-objective'), activityProgress: $('#activity-progress'), activityTimer: $('#activity-timer'),
+  vehicleDiagnostics: $('#vehicle-diagnostics'), engineText: $('#engine-text'), bodyText: $('#body-text'), tiresText: $('#tires-text'), statsBody: $('#stats-body'),
+  radioStation: $('#radio-station'), districtBanner: $('#district-banner'), districtName: $('#district-name'), phonePanel: $('#phone-panel'), phoneClose: $('#phone-close'),
+  phoneMap: $('#phone-map'), phoneTime: $('#phone-time'), phoneDistrict: $('#phone-district'), phoneBusinesses: $('#phone-businesses'), phoneIncome: $('#phone-income'),
+  phoneReputation: $('#phone-reputation'), phoneTier: $('#phone-tier'), phoneStory: $('#phone-story')
+};
+
+const CONFIG = {
+  worldSize: 360,
+  roadCenters: [-120, -60, 0, 60, 120],
+  roadWidth: 15,
+  playerSpeed: 10,
+  sprintSpeed: 17,
+  gravity: 28,
+  jumpVelocity: 11,
+  saveKey: 'neon-bay-save-v4',
+  legacySaveKey: 'neon-bay-save-v3',
+  olderSaveKey: 'neon-bay-save-v2',
+  oldestSaveKey: 'neon-bay-save-v1'
+};
+
+const state = {
+  running: false,
+  paused: false,
+  gameOver: false,
+  pointerLocked: false,
+  activeVehicle: null,
+  currentMission: 0,
+  missionStep: 0,
+  missionTimer: 0,
+  missionKills: 0,
+  missionTargetKills: 0,
+  missionSpecial: {},
+  health: 100,
+  armor: 25,
+  stamina: 100,
+  cash: 500,
+  weapon: 'pistol',
+  ammo: 12,
+  reserve: 72,
+  weaponData: { pistol: { ammo: 12, reserve: 72, mag: 12 }, shotgun: { ammo: 6, reserve: 24, mag: 6 } },
+  reloading: false,
+  wanted: 0,
+  wantedHeat: 0,
+  wantedLastKnown: new THREE.Vector3(-130,0,-118),
+  arrestProgress: 0,
+  activeActivity: null,
+  activityStage: 0,
+  activityTimer: 0,
+  activityCheckpoint: 0,
+  vehicleUpgrades: { engine: 0, brakes: 0, grip: 0 },
+  ownedWeapons: { pistol: true, shotgun: true, smg: false },
+  radioStation: 0,
+  phoneOpen: false,
+  districtId: 'little-bay',
+  territoryControl: { 'ocean-drive': 35, 'vice-point': 20, harbor: 15, downtown: 10, 'little-bay': 45 },
+  outfitIndex: 0,
+  timeOfDay: 18.3,
+  weather: 'CLEAR',
+  weatherTimer: 55,
+  quality: localStorage.getItem('neon-bay-quality') || 'high',
+  musicEnabled: true,
+  sfxEnabled: true,
+  sensitivity: 1,
+  voiceEnabled: true,
+  currentInterior: null,
+  cinematic: false,
+  cinematicTime: 0,
+  firstRideCinematicSeen: false,
+  demoMode: !!globalThis.__NB_FORCE_TRAILER__ || new URLSearchParams(globalThis.location?.search || '').get('trailer') === '1',
+  chapterComplete: false,
+  storyComplete: false
+};
+
+const input = {
+  keys: new Set(),
+  mobileX: 0,
+  mobileY: 0,
+  fire: false,
+  aim: false,
+  jumpQueued: false,
+  interactQueued: false
+};
+
+const WEAPONS = {
+  pistol: { name:'9MM PISTOL', mag:12, cooldown:220, reload:1050, damage:42, pellets:1, spread:0 },
+  shotgun: { name:'PUMP SHOTGUN', mag:6, cooldown:760, reload:1450, damage:24, pellets:7, spread:.045 },
+  smg: { name:'VICE SMG', mag:30, cooldown:92, reload:1350, damage:19, pellets:1, spread:.018 }
+};
+
+let scene, camera, renderer, clock, player, playerVelocity, sun, hemi, rain, objectiveMarker;
+let composer=null, bloomPass=null, oceanSurface=null, skyDome=null, sunDisc=null;
+const actorLibrary = new ActorLibrary();
+let playerActor, interiorSystem, dialogue, demoDirector, missionContact;
+let cameraYaw = Math.PI * .25;
+let cameraPitch = -.22;
+let cameraDistance = 8.5;
+let notificationTimer = 0;
+let lastShotAt = 0;
+let wantedSpawnTimer = 0;
+let saveTimer = 0;
+let worldTime = 0;
+let collisionBoxes = [];
+let vehicles = [];
+let enemies = [];
+let pedestrians = [];
+let traffic = [];
+let policeCruisers = [];
+let interactables = [];
+let streetLights = [];
+let roadMaterials = [];
+let districtBannerTimer = 0;
+let currentDistrict = null;
+let coverPoints = [];
+let trafficSignals = [];
+let roadblocks = [];
+let activityMarker = null;
+let wantedSearchMarker = null;
+let lastGunshotPosition = null;
+let lastGunshotAt = -999;
+const mapCtx = dom.minimap.getContext('2d');
+const raycaster = new THREE.Raycaster();
+const tmpV = new THREE.Vector3();
+const tmpV2 = new THREE.Vector3();
+const tmpBox = new THREE.Box3();
+let progression = new ProgressionSystem();
+let businessEmpire = new BusinessEmpire();
+const phoneMapCtx = dom.phoneMap?.getContext('2d');
+
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.musicNodes = [];
+    this.master = null;
+    this.sirenPhase = 0;
+  }
+  start() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = .16;
+      this.master.connect(this.ctx.destination);
+      this.startMusic();
+    } catch { /* Audio is optional. */ }
+  }
+  tone(freq, duration = .08, type = 'square', volume = .12, slide = 0) {
+    if (!this.ctx || !state.sfxEnabled) return;
+    const now = this.ctx.currentTime;
+    const oscillator = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(freq, now);
+    if (slide) oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), now + duration);
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+    oscillator.connect(gain).connect(this.master);
+    oscillator.start(now);
+    oscillator.stop(now + duration + .02);
+  }
+  noise(duration = .08, volume = .12) {
+    if (!this.ctx || !state.sfxEnabled) return;
+    const length = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
+    const buffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    const source = this.ctx.createBufferSource();
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    source.buffer = buffer;
+    source.connect(gain).connect(this.master);
+    source.start();
+  }
+  shot() { this.noise(.09, .23); this.tone(95, .1, 'sawtooth', .1, -40); }
+  hit() { this.tone(160, .06, 'square', .12, -60); }
+  pickup() { this.tone(420, .08, 'sine', .11, 220); setTimeout(() => this.tone(680, .1, 'sine', .09), 70); }
+  cash() { [420, 620, 840].forEach((f, i) => setTimeout(() => this.tone(f, .11, 'triangle', .08), i * 65)); }
+  mission() { [330, 440, 660, 880].forEach((f, i) => setTimeout(() => this.tone(f, .16, 'triangle', .1), i * 100)); }
+  car() { this.tone(75, .13, 'sawtooth', .11, 40); }
+  startMusic() {
+    if (!this.ctx || this.musicNodes.length) return;
+    const station = RADIO_STATIONS[state.radioStation] || RADIO_STATIONS[0];
+    station.frequencies.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      osc.type = station.waveforms[i] || 'triangle';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass';
+      filter.frequency.value = i < 2 ? 420 : 760;
+      gain.gain.value = i === 0 ? .018 : .006;
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start();
+      this.musicNodes.push({ osc, gain, filter });
+    });
+    this.setMusic(state.musicEnabled);
+  }
+  setMusic(enabled) {
+    state.musicEnabled = enabled;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.musicNodes.forEach((node, i) => node.gain.gain.linearRampToValueAtTime(enabled ? (i === 0 ? .018 : .006) : 0, now + .25));
+  }
+  setRadio(index, announce = true) {
+    state.radioStation = ((index % RADIO_STATIONS.length) + RADIO_STATIONS.length) % RADIO_STATIONS.length;
+    const station = RADIO_STATIONS[state.radioStation];
+    if (this.ctx && this.musicNodes.length) {
+      const now = this.ctx.currentTime;
+      this.musicNodes.forEach((node, i) => {
+        node.osc.type = station.waveforms[i] || 'triangle';
+        node.osc.frequency.exponentialRampToValueAtTime(station.frequencies[i] || station.frequencies[0], now + .35);
+      });
+    }
+    if (dom.radioStation) dom.radioStation.textContent = station.name;
+    if (announce) notify(`${station.name} — ${station.tagline}`, 2.4);
+  }
+}
+const audio = new AudioEngine();
+
+function seededRandom(seed) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
