@@ -1,21 +1,17 @@
 {
   "name": "neon-bay",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "dev": "bash scripts/apply-v12-build.sh && vite --host 0.0.0.0",
+    "build": "bash scripts/apply-v12-build.sh && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "node --check src/main.js",
+    "check": "bash scripts/apply-v12-build.sh && node --check src/main.js",
+    "test:modules": "node scripts/module-test.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:missions": "node scripts/mission-test.mjs",
-    "test": "npm run check && npm run test:modules && npm run test:smoke && npm run test:missions && npm run build",
-    "test:modules": "node scripts/module-test.mjs",
-    "assemble": "node scripts/assemble-main.mjs",
-    "predev": "npm run assemble",
-    "prebuild": "npm run assemble",
-    "precheck": "npm run assemble"
+    "test": "bash scripts/apply-v12-build.sh && node --check src/main.js && npm run test:modules && npm run test:smoke && npm run test:missions && vite build"
   },
   "dependencies": {
     "three": "^0.179.1"
