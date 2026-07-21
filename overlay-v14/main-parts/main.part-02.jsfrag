@@ -1,0 +1,179 @@
+    this.profile = profiles[type] || profiles[type === 'police' ? 'police' : id === 'sunset' ? 'sunset' : id === 'ocean' ? 'ocean' : type === 'van' ? 'van' : 'ocean'];
+    this.maxSpeed = this.profile.maxSpeed;
+    this.acceleration = this.profile.acceleration;
+    this.turnSpeed = this.profile.turn;
+    this.steerAngle = 0;
+    this.bodyRoll = 0;
+    this.braking = false;
+    this.type = type;
+    this.occupied = false;
+    this.destroyed = false;
+    this.ai = false;
+    this.path = null;
+    this.pathIndex = 0;
+    this.direction = 1;
+
+    const isVan = type === 'van';
+    const isLimo = type === 'limo';
+    const isExotic = type === 'exotic';
+    const isMuscle = type === 'muscle';
+    const isSunset = id === 'sunset';
+    const isOcean = id === 'ocean';
+    const bodyLength=isLimo?5.65:isVan?4.45:isMuscle?4.55:isExotic?4.28:isSunset?4.35:4.08;
+    const bodyWidth=isLimo?2.18:isVan?2.25:isExotic?2.16:2.08;
+    const bodyHeight=isVan?1.25:isExotic?.56:isMuscle?.78:.68;
+    const body = makeBox(bodyWidth, bodyHeight, bodyLength, color, 0, isVan ? .92 : isExotic?.56:.64, 0);
+    body.name = 'VehicleBody'; body.material.roughness = .38; body.material.metalness = .32; this.body = body;
+    const cabinColor = type === 'police' ? 0xddeaff : isOcean ? 0x163f52 : 0x161b30;
+    const cabin = makeBox(isVan ? 2.02 : isLimo?1.88:isSunset ? 1.68 : 1.8, isVan ? .9 : isExotic?.58:.7, isVan ? 2.7 : isLimo?3.25:1.88, cabinColor, 0, isVan ? 1.72 : isExotic?1.08:1.26, isVan ? .15 : isLimo?.2:-.08);
+    cabin.name = 'Cabin'; cabin.material.metalness = .18; cabin.material.roughness = .3;
+    const hood = makeBox(isVan ? 2.02 : 1.9, .18, isVan ? .72 : isLimo?1.35:1.25, color, 0, isVan ? 1.15 : isExotic?.78:.91, isVan ? -1.76 : -bodyLength*.35);
+    const bumperZ=bodyLength/2+.08;
+    const bumperA = makeBox(bodyWidth+.12, .19, .2, 0x11151e, 0, .4, -bumperZ);
+    const bumperB = makeBox(bodyWidth+.12, .19, .2, 0x11151e, 0, .4, bumperZ);
+    const grille = makeBox(1.05,.22,.06,0x101116,0,.58,-bumperZ-.11);
+    const headL = makeBox(.4,.17,.06,0xe8f9ff,-.67,.73,-bumperZ-.11); headL.material.emissive=new THREE.Color(0xa9eaff);headL.material.emissiveIntensity=1.2;
+    const headR = headL.clone();headR.position.x=.67;
+    this.headlights=[headL,headR];
+    this.brakeLights=[makeBox(.42,.18,.06,0xff243f,-.68,.72,bumperZ+.11),makeBox(.42,.18,.06,0xff243f,.68,.72,bumperZ+.11)];
+    this.brakeLights.forEach(light=>{light.material=light.material.clone();light.material.emissive=new THREE.Color(0xff102f);light.material.emissiveIntensity=.35;});
+    this.mesh.add(body,cabin,hood,bumperA,bumperB,grille,headL,headR,...this.brakeLights);
+    if(isSunset){const spoiler=makeBox(1.6,.12,.34,0x171924,0,1.05,1.78);const s1=makeBox(.12,.42,.12,0x171924,-.58,.84,1.78);const s2=s1.clone();s2.position.x=.58;this.mesh.add(spoiler,s1,s2);}
+    if(isOcean){const stripe=makeBox(1.45,.04,3.25,0x4fe7ff,0,1.005,0);stripe.material.emissive=new THREE.Color(0x0d6877);stripe.material.emissiveIntensity=.7;this.mesh.add(stripe);}
+    if(isVan){for(const x of [-.72,.72]){const doorLine=makeBox(.035,.75,1.7,0x10141d,x,1.35,.48);this.mesh.add(doorLine);}}
+    if(isExotic){const splitter=makeBox(1.9,.08,.5,0x15151c,0,.3,-bumperZ);const intake=makeBox(.7,.12,.08,0x38e8ff,0,.58,-bumperZ-.13);intake.material.emissive=new THREE.Color(0x16717c);intake.material.emissiveIntensity=1.3;this.mesh.add(splitter,intake);}
+    if(isMuscle){const scoop=makeBox(.82,.24,.8,0x171923,0,1.03,-.55);const stripe=makeBox(.42,.04,bodyLength*.76,0xf4d45d,0,1.04,0);this.mesh.add(scoop,stripe);}
+    if(isLimo){const chrome=makeBox(bodyWidth+.04,.08,bodyLength*.82,0xd8e3ea,0,.76,0);chrome.material.metalness=.9;chrome.material.roughness=.18;this.mesh.add(chrome);}
+
+    this.wheels = []; this.frontWheels = [];
+    const wheelGeo = new THREE.CylinderGeometry(isVan ? .4 : .36, isVan ? .4 : .36, .28, 16);
+    wheelGeo.rotateZ(Math.PI / 2);
+    const axleZ=isLimo?2.05:isVan?1.6:1.45;
+    for (const sx of [-1, 1]) for (const sz of [-axleZ, axleZ]) {
+      const wheelPivot = new THREE.Group(); wheelPivot.position.set(sx * 1.03, .38, sz);
+      const wheel = new THREE.Mesh(wheelGeo, material(0x0b0d12, .84)); wheelPivot.add(wheel);
+      wheel.userData.spinMesh = true; this.wheels.push(wheel);
+      if(sz < 0) this.frontWheels.push(wheelPivot);
+      this.mesh.add(wheelPivot);
+    }
+    if (type === 'police') {
+      const bar = makeBox(1.2, .13, .22, 0xe8edf6, 0, 1.82, 0);
+      const red = makeBox(.5, .16, .26, 0xff273c, -.3, 1.91, 0);
+      const blue = makeBox(.5, .16, .26, 0x258cff, .3, 1.91, 0);
+      this.mesh.add(bar, red, blue);
+    }
+    this.mesh.position.set(x, 0, z);
+    this.mesh.rotation.y = rotation;
+    this.mesh.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.vehicle = this; } });
+    attachVehicleDamage(this);
+    scene.add(this.mesh);
+    vehicles.push(this);
+  }
+  update(dt) {
+    if (this.destroyed) return;
+    if (this === state.activeVehicle) this.updatePlayerControlled(dt);
+    else if (this.ai) this.updateAI(dt);
+    const suspension = Math.sin(worldTime * 5.5 + this.mesh.position.x * .08) * Math.min(.035, Math.abs(this.speed) * .0015);
+    this.mesh.position.y = suspension;
+    this.mesh.rotation.y = this.rotation;
+    this.mesh.rotation.z = lerp(this.mesh.rotation.z, this.bodyRoll, dt * 7);
+    this.wheels.forEach(w => w.rotation.x -= this.speed * dt * .88);
+    this.frontWheels.forEach(w => w.rotation.y = this.steerAngle * .55);
+    this.brakeLights?.forEach(light => light.material.emissiveIntensity = this.braking ? 2.4 : .3);
+    updateVehicleDamage(this, dt, worldTime);
+  }
+  updatePlayerControlled(dt) {
+    const throttle = inputAxis('forward');
+    const turn = inputAxis('turn');
+    const boost = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');
+    const handbrake = input.keys.has('Space');
+    const p = this.profile;
+    const upgradeEngine=1+state.vehicleUpgrades.engine*.055;
+    const upgradeGrip=1+state.vehicleUpgrades.grip*.035;
+    const upgradeBrakes=1+state.vehicleUpgrades.brakes*.08;
+    const engineFactor=lerp(.42,1,clamp(this.engineHealth/100,0,1));
+    const tireFactor=lerp(.48,1,clamp(this.tireHealth/100,0,1));
+    const targetMax = p.maxSpeed * (boost ? 1.1 : 1) * upgradeEngine * engineFactor;
+    this.braking = (throttle < -.05 && this.speed > 1) || handbrake;
+    if (throttle > .05) this.speed += p.acceleration * throttle * dt;
+    else if (throttle < -.05) {
+      if (this.speed > 1) this.speed -= p.brake * upgradeBrakes * -throttle * dt;
+      else this.speed += p.acceleration * .62 * throttle * dt;
+    } else {
+      const rolling = .55 + Math.abs(this.speed) * .045;
+      this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), rolling * dt);
+    }
+    this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), this.speed * this.speed * .0009 * dt);
+    if (handbrake) this.speed *= Math.pow(.12, dt);
+    this.speed = clamp(this.speed, -p.reverse, targetMax);
+    const speedRatio = clamp(Math.abs(this.speed) / p.maxSpeed, 0, 1);
+    const steeringLimit = lerp(.72, .24, speedRatio) * tireFactor * upgradeGrip;
+    this.steerAngle = lerp(this.steerAngle, turn * steeringLimit, 1 - Math.pow(.002, dt));
+    const driftGrip = handbrake ? p.grip * .36 : p.grip;
+    const yawRate = this.steerAngle * p.turn * (0.18 + speedRatio * .95) * Math.sign(this.speed || 1) * driftGrip;
+    this.rotation -= yawRate * dt;
+    this.bodyRoll = lerp(this.bodyRoll, -this.steerAngle * speedRatio * .16, dt * (handbrake ? 3 : 7));
+    const nextX = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nextZ = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nextX, nextZ, 1.25)) {
+      this.mesh.position.x = nextX; this.mesh.position.z = nextZ;progression.record('distanceDriven',Math.abs(this.speed)*dt);
+    } else {
+      const impact = Math.abs(this.speed) * p.mass;
+      if (impact > 8) { applyVehicleImpact(this,impact,'front'); damagePlayer(impact * .1); audio.hit(); }
+      this.speed *= -.18;
+      if (this.health <= 0) destroyVehicle(this);
+    }
+    const hitEntities = [...enemies, ...pedestrians].filter(e => e.alive && e.group.position.distanceTo(this.mesh.position) < 1.7);
+    hitEntities.forEach(entity => {
+      if (Math.abs(this.speed) > 8) {
+        entity.takeDamage(Math.abs(this.speed) * 4 * p.mass, true); this.speed *= .68;
+        raiseWanted(entity.police?'officer':'collision',entity.police?3:1);
+      }
+    });
+    dom.speedText.textContent = Math.round(Math.abs(this.speed) * 3.6);
+  }
+  updateAI(dt) {
+    if (this.type === 'police') {
+      const target = getPlayerPosition();
+      const toTarget = tmpV.copy(target).sub(this.mesh.position);
+      const desired = Math.atan2(-toTarget.x, -toTarget.z);
+      this.rotation = rotateToward(this.rotation, desired, 1.4 * dt);
+      this.speed = lerp(this.speed, this.maxSpeed * .72, dt * .75);
+      const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+      const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+      if (!collidesAt(nx, nz, 1.2)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+      else { this.rotation += Math.PI * (.55 + random() * .25); this.speed *= .35; }
+      if (toTarget.length() < 3.2) {
+        damagePlayer(10 * dt);
+        if (state.activeVehicle) state.activeVehicle.speed *= .97;
+      }
+      return;
+    }
+    if (!this.path?.length) return;
+    const target = this.path[this.pathIndex];
+    const toTarget = tmpV.copy(target).sub(this.mesh.position);
+    if (toTarget.length() < 3) this.pathIndex = (this.pathIndex + 1) % this.path.length;
+    const desired = Math.atan2(-toTarget.x, -toTarget.z);
+    this.rotation = rotateToward(this.rotation, desired, this.turnSpeed * .55 * dt);
+    const blockedBySignal = trafficShouldStop(this, target);
+    const blockedByVehicle = trafficVehicleAhead(this);
+    const densityActive = trafficVehicleActive(this);
+    this.mesh.visible = densityActive;
+    if (!densityActive) { this.speed = 0; return; }
+    const desiredSpeed = blockedBySignal || blockedByVehicle ? 0 : this.maxSpeed * .38;
+    this.braking = desiredSpeed < this.speed;
+    this.speed = lerp(this.speed, desiredSpeed, dt * (blockedBySignal ? 3.2 : 1.25));
+    const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nx, nz, 1.1)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+    else { this.pathIndex = (this.pathIndex + 1) % this.path.length; this.speed *= .2; }
+  }
+}
+
+class CharacterAI {
+  constructor(x, z, options = {}) {
+    this.police = !!options.police;
+    this.passive = !!options.passive;
+    this.boss = !!options.boss;
+    this.missionTarget = !!options.missionTarget;
+    this.alive = true;
