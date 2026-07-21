@@ -10,7 +10,8 @@ cat release-v1.2-lite.part-* | base64 --decode > "$tmp_archive"
 tar -xJf "$tmp_archive" -C .
 rm -f "$tmp_archive"
 
-python3 scripts/generate-character-glb.py
+mkdir -p public/models
+cat release-v1.2-assets/neon-citizen.glb.part-* | base64 --decode > public/models/neon-citizen.glb
 
 cat > src/modules/dialogue-system.js <<'JS'
 export class DialogueSystem {
