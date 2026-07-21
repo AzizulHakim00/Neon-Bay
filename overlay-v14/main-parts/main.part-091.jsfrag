@@ -1,0 +1,38 @@
+function reload() {
+  const weapon=WEAPONS[state.weapon];
+  if(state.reloading||state.activeVehicle||state.ammo>=weapon.mag||state.reserve<=0)return;
+  state.reloading=true;dom.weaponName.textContent='RELOADING…';audio.tone(220,.08,'square',.05);
+  setTimeout(()=>{const needed=weapon.mag-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;state.reloading=false;dom.weaponName.textContent=weapon.name;audio.tone(420,.08,'square',.05);},weapon.reload);
+}
+
+function damagePlayer(amount) {
+  if(!state.running||state.gameOver)return;
+  let remaining=amount;
+  if(state.armor>0){const absorbed=Math.min(state.armor,remaining*.7);state.armor-=absorbed;remaining-=absorbed;}
+  state.health=Math.max(0,state.health-remaining);
+  if(state.health<=0)failMission('You were taken down.');
+}
+
+function updateHUD() {
+  dom.healthBar.style.width=`${state.health}%`;dom.healthText.textContent=Math.ceil(state.health);
+  dom.armorBar.style.width=`${state.armor}%`;dom.armorText.textContent=Math.ceil(state.armor);
+  dom.staminaBar.style.width=`${state.stamina}%`;dom.staminaText.textContent=Math.ceil(state.stamina);
+  dom.cash.textContent=Math.floor(state.cash).toLocaleString();dom.ammo.textContent=state.ammo;dom.reserve.textContent=state.reserve;dom.weaponName.textContent=state.reloading?'RELOADING…':WEAPONS[state.weapon].name;
+  dom.wanted.textContent=Array.from({length:3},(_,i)=>i<state.wanted?'★':'☆').join(' ');
+  if(dom.wantedStatus)dom.wantedStatus.textContent=wantedProfile(state.wanted).label;
+  if(dom.repText)dom.repText.textContent=progression.reputation.toLocaleString();if(dom.repTier)dom.repTier.textContent=progression.tier().name;if(dom.repProgress)dom.repProgress.style.width=`${progression.progress()*100}%`;
+  if(dom.vehicleDiagnostics){const v=state.activeVehicle;dom.vehicleDiagnostics.classList.toggle('hidden',!v);if(v){dom.engineText.textContent=Math.ceil(v.engineHealth);dom.bodyText.textContent=Math.ceil(v.bodyHealth);dom.tiresText.textContent=Math.ceil(v.tireHealth);}}
+  const h=Math.floor(state.timeOfDay),m=Math.floor((state.timeOfDay-h)*60);dom.clock.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  dom.weather.textContent=state.weather;if(dom.radioStation)dom.radioStation.textContent=(RADIO_STATIONS[state.radioStation]||RADIO_STATIONS[0]).name;if(state.phoneOpen)updatePhone();
+}
+
+function drawMinimap() {
+  const ctx=mapCtx,w=dom.minimap.width,h=dom.minimap.height,scale=.55;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#08101d';ctx.fillRect(0,0,w,h);
+  if(state.currentInterior){ctx.strokeStyle='rgba(101,239,255,.75)';ctx.lineWidth=4;ctx.strokeRect(28,35,w-56,h-70);ctx.fillStyle='#bff8ff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(interiorSystem?.label()||'INTERIOR',w/2,24);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(w/2,h/2,5,0,Math.PI*2);ctx.fill();return;}
+  ctx.save();ctx.translate(w/2,h/2);
+  ctx.strokeStyle='rgba(190,205,225,.25)';ctx.lineWidth=CONFIG.roadWidth*scale;
+  CONFIG.roadCenters.forEach(c=>{ctx.beginPath();ctx.moveTo(-180*scale,c*scale);ctx.lineTo(180*scale,c*scale);ctx.stroke();ctx.beginPath();ctx.moveTo(c*scale,-180*scale);ctx.lineTo(c*scale,180*scale);ctx.stroke();});
+  ctx.fillStyle='rgba(46,189,208,.35)';ctx.fillRect(155*scale,-180*scale,120*scale,360*scale);
+  if(objectiveMarker?.visible){ctx.fillStyle='#ff3eb5';ctx.beginPath();ctx.arc(objectiveMarker.position.x*scale,objectiveMarker.position.z*scale,5,0,Math.PI*2);ctx.fill();}
+  if(activityMarker?.visible){ctx.fillStyle='#35f2ad';ctx.beginPath();ctx.arc(activityMarker.position.x*scale,activityMarker.position.z*scale,5,0,Math.PI*2);ctx.fill();}
