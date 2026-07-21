@@ -1,0 +1,126 @@
+  new CharacterAI(-13,-54,{passive:true,stationary:true,role:'vendor'});
+  new CharacterAI(108,-84,{passive:true,stationary:true,role:'mechanic'});
+  missionContact=new CharacterAI(-118,-136,{passive:true,stationary:true,role:'contact'});
+}
+
+function buildInteractables() {
+  interactables = [
+    { id:'weapon-shop', label:'Buy 36 rounds — $180', position:new THREE.Vector3(-12,0,-60), radius:4, type:'shop', color:0xff3eb5 },
+    { id:'clinic', label:'Restore health — $250', position:new THREE.Vector3(60,0,8), radius:4, type:'clinic', color:0x62ffaf },
+    { id:'garage', label:'Repair vehicle — $300', position:new THREE.Vector3(108,0,-90), radius:5, type:'garage', color:0x38e8ff },
+    { id:'taxi-job', label:'Start Coastline Taxi job', position:new THREE.Vector3(-72,0,-8), radius:4, type:'side-taxi', color:0xf3c445 },
+    { id:'race-job', label:'Start Ocean Drive street race', position:new THREE.Vector3(105,0,-92), radius:4.5, type:'side-race', color:0x9b63ff },
+    { id:'nightclub-business', label:'Purchase Starfall Nightclub — $6,500', position:new THREE.Vector3(98,0,31), radius:4, type:'purchase-nightclub', color:0xff4fb7 },
+    { id:'taxi-business', label:'Purchase Coastline Cabs — $3,500', position:new THREE.Vector3(-82,0,-8), radius:4, type:'purchase-taxi', color:0xf3c445 },
+    { id:'garage-business', label:'Purchase Vice Coast Customs — $5,200', position:new THREE.Vector3(108,0,-77), radius:4, type:'purchase-garage', color:0x38e8ff },
+    { id:'gunshop-smg', label:'Buy VICE SMG — $1,200', position:new THREE.Vector3(510,0,-4), radius:2.7, type:'buy-smg', color:0xff6f9f, interiorOnly:'gunshop' },
+    { id:'apartment-save', label:'Save game', position:new THREE.Vector3(465,0,3), radius:2.5, type:'apartment-save', color:0x65efff, interiorOnly:'apartment' },
+    { id:'apartment-wardrobe', label:'Change outfit', position:new THREE.Vector3(474,0,3), radius:2.5, type:'wardrobe', color:0xff76cb, interiorOnly:'apartment' },
+    { id:'apartment-stats', label:'View career statistics', position:new THREE.Vector3(465,0,-5), radius:2.5, type:'stats', color:0xffd45a, interiorOnly:'apartment' },
+    { id:'garage-engine', label:'Upgrade engine', position:new THREE.Vector3(544,0,5), radius:2.7, type:'upgrade-engine', color:0xff8b3d, interiorOnly:'garage' },
+    { id:'garage-brakes', label:'Upgrade brakes', position:new THREE.Vector3(552,0,0), radius:2.7, type:'upgrade-brakes', color:0x59d5ff, interiorOnly:'garage' },
+    { id:'garage-grip', label:'Upgrade tires and grip', position:new THREE.Vector3(560,0,-5), radius:2.7, type:'upgrade-grip', color:0x63f29b, interiorOnly:'garage' },
+  ];
+  interactables.push(...(interiorSystem?.entries || []));
+  interactables.forEach(item => {
+    const label = item.id === 'weapon-shop' ? 'A' : item.id === 'clinic' ? '+' : item.id === 'garage' ? 'G' : item.type === 'side-taxi' ? 'T' : item.type === 'side-race' ? 'R' : item.type?.startsWith('purchase-') ? '$' : item.type === 'buy-smg' ? '3' : item.type === 'interior-exit' ? '↩' : '▣';
+    item.marker = buildServiceMarker(item.position, item.color, label);
+    if(item.interiorOnly)item.marker.visible=false;
+  });
+}
+
+function buildServiceMarker(position,color,label) {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.1,.12,8,28), new THREE.MeshBasicMaterial({color})); ring.rotation.x=Math.PI/2; ring.position.y=.12;
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(.06,.45,5,12,1,true), new THREE.MeshBasicMaterial({color,transparent:true,opacity:.15,side:THREE.DoubleSide})); beam.position.y=2.5;
+  group.add(ring,beam); group.position.copy(position); scene.add(group); return group;
+}
+
+function buildMarker(color) {
+  const group = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.85,.17,10,40), new THREE.MeshBasicMaterial({color})); ring.rotation.x=Math.PI/2; ring.position.y=.18;
+  const core = new THREE.Mesh(new THREE.CylinderGeometry(.25,1.2,9,18,1,true), new THREE.MeshBasicMaterial({color,transparent:true,opacity:.2,side:THREE.DoubleSide})); core.position.y=4.5;
+  const arrow = new THREE.Mesh(new THREE.ConeGeometry(.55,1.1,10), new THREE.MeshBasicMaterial({color})); arrow.position.y=3.2; arrow.rotation.x=Math.PI;
+  group.add(ring,core,arrow); scene.add(group); return group;
+}
+
+function buildRain() {
+  const count = state.quality === 'low' ? 350 : 900;
+  const positions = new Float32Array(count*3);
+  for (let i=0;i<count;i++) { positions[i*3]=rand(-70,70); positions[i*3+1]=rand(2,55); positions[i*3+2]=rand(-70,70); }
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  rain=new THREE.Points(geo,new THREE.PointsMaterial({color:0x9edfff,size:.1,transparent:true,opacity:.75})); rain.visible=false; scene.add(rain);
+}
+
+const MISSIONS = [
+  { title:'First Ride', reward:750, summary:'The garage paid in cash. The Bay noticed.', start:new THREE.Vector3(-130,0,-118) },
+  { title:'Beach Exchange', reward:1100, summary:'The exchange went loud, but you walked away.', start:new THREE.Vector3(108,0,-90) },
+  { title:'Hot Delivery', reward:1500, summary:'Package delivered before the sirens closed in.', start:new THREE.Vector3(115,0,-120) },
+  { title:'Warehouse Trouble', reward:2200, summary:'The stolen ledger is back in friendly hands.', start:new THREE.Vector3(-141,0,112) },
+  { title:'District Boss', reward:5000, summary:'Coastline District belongs to nobody—but they know your name.', start:new THREE.Vector3(-141,0,112) },
+  ...CHAPTER_TWO_MISSIONS.map(mission=>({...mission,start:new THREE.Vector3(mission.start[0],0,mission.start[1])}))
+];
+
+function startMission(index, resetPosition = true) {
+  if(state.currentInterior){interiorSystem.current=null;interiorSystem.returnPosition=null;state.currentInterior=null;dom.interiorLabel?.classList.add('hidden');}
+  if(state.activeActivity)cancelSideActivity('Side activity cancelled for story mission.');clearRoadblocks();
+  clearMissionEnemies();
+  state.currentMission = clamp(index,0,MISSIONS.length-1);
+  state.missionStep = 0;
+  state.missionTimer = 0;
+  state.missionKills = 0;
+  state.missionTargetKills = 0;
+  state.missionSpecial = {};
+  state.wanted = 0;
+  state.wantedHeat = 0;
+  if (state.activeVehicle) exitVehicle(true);
+  if (resetPosition) player.position.copy(MISSIONS[state.currentMission].start);
+  player.visible = true;
+  updateMissionObjective(true);
+  saveGame(true);
+}
+
+function updateMissionObjective(force = false) {
+  const m=state.currentMission,s=state.missionStep;
+  dom.missionNumber.textContent=`JOB ${String(m+1).padStart(2,'0')}`;
+  dom.missionTitle.textContent=MISSIONS[m].title;
+  let text='', pos=null, progress=0;
+  if (m===0) {
+    if(s===0){text='Meet your contact in the apartment courtyard.';pos=new THREE.Vector3(-118,0,-136);progress=.12;}
+    else if(s===1){text='Enter the pink Sunset sports car.';pos=getVehicle('sunset').mesh.position;progress=.38;}
+    else if(s===2){text='Drive the Sunset to the Coastline garage.';pos=new THREE.Vector3(108,0,-90);progress=.72;}
+  } else if(m===1) {
+    if(s===0){text='Go to the beach exchange point.';pos=new THREE.Vector3(132,0,-132);progress=.18;}
+    else if(s===1){text=`Survive the ambush. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(132,0,-132);progress=.45+Math.min(.35,state.missionKills*.11);}
+    else if(s===2){text='Lose the police and reach the marina pier.';pos=new THREE.Vector3(193,0,125);progress=.88;}
+  } else if(m===2) {
+    if(s===0){text='Collect the package at the harbor warehouse.';pos=new THREE.Vector3(112,0,96);progress=.18;}
+    else if(s===1){text='Get into a vehicle before the patrol arrives.';pos=nearestVehiclePosition();progress=.36;}
+    else if(s===2){text=`Deliver to the safehouse. ${Math.max(0,Math.ceil(state.missionTimer))} seconds remaining.`;pos=new THREE.Vector3(-141,0,112);progress=.58+Math.min(.38,(90-state.missionTimer)/90*.38);}
+  } else if(m===3) {
+    if(s===0){text='Enter the warehouse yard.';pos=new THREE.Vector3(96,0,114);progress=.15;}
+    else if(s===1){text=`Clear the warehouse. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(96,0,114);progress=.33+Math.min(.38,state.missionKills*.06);}
+    else if(s===2){text='Recover the stolen ledger.';pos=new THREE.Vector3(112,0,104);progress=.78;}
+    else if(s===3){text='Take the ledger to the apartment safehouse.';pos=new THREE.Vector3(-141,0,112);progress=.9;}
+  } else if(m===4) {
+    if(s===0){text='Meet the district boss at the old hotel.';pos=new THREE.Vector3(0,0,120);progress=.15;}
+    else if(s===1){text=`Defeat the boss and guards. Hostiles remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(0,0,120);progress=.35+Math.min(.42,state.missionKills*.08);}
+    else if(s===2){text='Escape to the end of the pier.';pos=new THREE.Vector3(200,0,125);progress=.9;}
+  } else if(m===5) {
+    if(s===0){text='Get to Starfall Nightclub before the retaliation arrives.';pos=new THREE.Vector3(112,0,42);progress=.15;}
+    else if(s===1){text=`Defend the nightclub. Attackers remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(116,0,38);progress=.35+Math.min(.42,state.missionKills*.08);}
+    else if(s===2){text='Reach Vice Coast Customs and regroup.';pos=new THREE.Vector3(108,0,-90);progress=.9;}
+  } else if(m===6) {
+    if(s===0){text='Enter the police station lobby.';pos=new THREE.Vector3(94,0,85);progress=.16;}
+    else if(s===1){text='Steal the Coastline evidence file.';pos=new THREE.Vector3(598,0,-6);progress=.5;}
+    else if(s===2){text='Escape the search and deliver the file to the safehouse.';pos=new THREE.Vector3(-141,0,112);progress=.84;}
+  } else if(m===7) {
+    if(s===0){text='Collect the shipment behind Harbor Freight.';pos=new THREE.Vector3(-150,0,67);progress=.16;}
+    else if(s===1){text='Load the shipment into a vehicle.';pos=nearestVehiclePosition();progress=.36;}
+    else if(s===2){text=`Reach the marina buyer. ${Math.max(0,Math.ceil(state.missionTimer))} seconds remaining.`;pos=new THREE.Vector3(193,0,125);progress=.56+Math.min(.4,(100-state.missionTimer)/100*.4);}
+  } else if(m===8) {
+    if(s===0){text='Meet the informant behind the Mirage Hotel.';pos=new THREE.Vector3(91,0,-54);progress=.15;}
+    else if(s===1){text=`Survive the double cross. Traitors remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(91,0,-54);progress=.34+Math.min(.45,state.missionKills*.065);}
+    else if(s===2){text='Bring the evidence to Starfall Nightclub.';pos=new THREE.Vector3(112,0,42);progress=.9;}
+  } else if(m===9) {
+    if(s===0){text='Meet the city factions at the Downtown plaza.';pos=new THREE.Vector3(0,0,60);progress=.14;}
