@@ -1,0 +1,197 @@
+  return () => (value = value * 16807 % 2147483647) / 2147483647;
+}
+const random = seededRandom(96421);
+const rand = (min, max) => min + (max - min) * random();
+
+function material(color, roughness = .75, metalness = .05) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+}
+
+function makeBox(w, h, d, color, x = 0, y = h / 2, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = state.quality === 'high';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+function buildSkyDome() {
+  const geometry = new THREE.SphereGeometry(520, 32, 18);
+  const uniforms = {
+    topColor: { value: new THREE.Color(0x071025) },
+    horizonColor: { value: new THREE.Color(0xa33b7d) },
+    lowerColor: { value: new THREE.Color(0x170c27) },
+    starStrength: { value: .7 },
+    time: { value: 0 },
+  };
+  const shader = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms,
+    vertexShader: `varying vec3 vWorld; void main(){ vec4 world=modelMatrix*vec4(position,1.0); vWorld=world.xyz; gl_Position=projectionMatrix*viewMatrix*world; }`,
+    fragmentShader: `
+      varying vec3 vWorld;
+      uniform vec3 topColor; uniform vec3 horizonColor; uniform vec3 lowerColor;
+      uniform float starStrength; uniform float time;
+      float hash(vec3 p){ p=fract(p*.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
+      void main(){
+        float h=normalize(vWorld).y;
+        vec3 color=mix(lowerColor,horizonColor,smoothstep(-.24,.12,h));
+        color=mix(color,topColor,smoothstep(.08,.72,h));
+        float star=step(.9975,hash(floor(normalize(vWorld)*620.0)))*smoothstep(.1,.72,h)*starStrength;
+        star*=.7+.3*sin(time*1.7+hash(vWorld)*20.0);
+        gl_FragColor=vec4(color+star,1.0);
+      }`,
+  });
+  skyDome = new THREE.Mesh(geometry, shader);
+  skyDome.frustumCulled = false;
+  scene.add(skyDome);
+  sunDisc = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ color:0xffb06d, transparent:true, opacity:.95 }));
+  scene.add(sunDisc);
+}
+
+function buildOceanSurface() {
+  const geometry = new THREE.PlaneGeometry(260, 520, 72, 112);
+  const uniforms = {
+    uTime: { value: 0 },
+    uDaylight: { value: .4 },
+    uRain: { value: 0 },
+    uDeep: { value: new THREE.Color(0x032b55) },
+    uShallow: { value: new THREE.Color(0x15b8c9) },
+    uSun: { value: new THREE.Color(0xff92c8) },
+  };
+  const shader = new THREE.ShaderMaterial({
+    uniforms,
+    transparent: true,
+    opacity: .96,
+    side: THREE.DoubleSide,
+    vertexShader: `
+      uniform float uTime; uniform float uRain; varying float vWave; varying vec2 vUv;
+      void main(){ vUv=uv; vec3 p=position; float w=sin(p.x*.075+uTime*.9)*.42+cos(p.y*.055-uTime*.72)*.32+sin((p.x+p.y)*.035+uTime*.48)*.2; p.z+=w*(1.0+uRain*.45); vWave=w; gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.0); }
+    `,
+    fragmentShader: `
+      uniform float uTime; uniform float uDaylight; uniform float uRain; uniform vec3 uDeep; uniform vec3 uShallow; uniform vec3 uSun;
+      varying float vWave; varying vec2 vUv;
+      void main(){ float bands=.5+.5*sin((vUv.x+vUv.y)*75.0+uTime*2.2); float foam=smoothstep(.43,.62,vWave+bands*.12)*(.18+uRain*.18); vec3 water=mix(uDeep,uShallow,clamp(vUv.x*.65+uDaylight*.25,0.0,1.0)); float reflection=pow(max(0.0,1.0-abs(vUv.y-.52)*2.0),8.0)*(.2+.45*uDaylight); gl_FragColor=vec4(water+uSun*reflection+vec3(foam),.94); }
+    `,
+  });
+  oceanSurface = new THREE.Mesh(geometry, shader);
+  oceanSurface.rotation.x = -Math.PI / 2;
+  oceanSurface.position.set(300, -.2, 0);
+  oceanSurface.receiveShadow = true;
+  scene.add(oceanSurface);
+}
+
+async function initPostFX() {
+  if (globalThis.__NEON_BAY_TEST__ || state.quality === 'low') return;
+  try {
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }] = await Promise.all([
+      import('three/addons/postprocessing/EffectComposer.js'),
+      import('three/addons/postprocessing/RenderPass.js'),
+      import('three/addons/postprocessing/UnrealBloomPass.js'),
+      import('three/addons/postprocessing/OutputPass.js'),
+    ]);
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), state.quality === 'high' ? .72 : .4, .68, .7);
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+    composer.setSize(innerWidth, innerHeight);
+  } catch (error) {
+    console.warn('Post-processing unavailable; using direct renderer.', error);
+    composer = null;
+  }
+}
+
+function addNeonPanel(label, x, y, z, width, color, rotationY = 0) {
+  const canvas = document.createElement('canvas'); canvas.width=512; canvas.height=128;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.clearRect(0,0,512,128); context.textAlign='center'; context.textBaseline='middle';
+    context.font='900 64px sans-serif'; context.shadowBlur=28; context.shadowColor=`#${color.toString(16).padStart(6,'0')}`; context.fillStyle='#ffffff'; context.fillText(label,256,66);
+  }
+  const texture = new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace;
+  const panel = new THREE.Mesh(new THREE.PlaneGeometry(width, width*.25), new THREE.MeshBasicMaterial({ map:texture, transparent:true, blending:THREE.AdditiveBlending, depthWrite:false }));
+  panel.position.set(x,y,z); panel.rotation.y=rotationY; scene.add(panel); streetLights.push(panel); return panel;
+}
+
+function buildViceCoastDistricts() {
+  buildNightlifeDistrict();
+  buildHarborDistrict();
+  buildDowntownSkyline();
+  buildBoardwalk();
+}
+
+function buildNightlifeDistrict() {
+  const club = makeBox(24, 15, 18, 0x382047, 98, 7.5, 42); club.name='Starfall Nightclub'; club.material.roughness=.42; scene.add(club); addCollider(98,42,24,18);
+  addWindows(club,24,15,18,440);
+  const awning=makeBox(11,.32,3.4,0xff3eb5,109.4,4.1,42);awning.material.emissive=new THREE.Color(0xff3eb5);awning.material.emissiveIntensity=2.2;scene.add(awning);
+  addNeonPanel('STARFALL',109.55,9.5,42,10,0xff3eb5,Math.PI/2);
+  for(let z=22;z<=62;z+=10){addPalm(122+rand(-1.5,1.5),z);const bollard=makeBox(.32,1.1,.32,z%20?0x37e9ff:0xff3eb5,116,.55,z);bollard.material.emissive=bollard.material.color.clone();bollard.material.emissiveIntensity=1.8;scene.add(bollard);streetLights.push(bollard);}
+  const hotel=makeBox(27,36,20,0x4b365b,78,18,45);hotel.name='Vice Point Resort';scene.add(hotel);addCollider(78,45,27,20);addWindows(hotel,27,36,20,445);addNeonPanel('VICE POINT',78,30,34.9,14,0x4de9ff,0);
+}
+
+function buildHarborDistrict() {
+  const warehouse=makeBox(30,11,24,0x35414a,-145,5.5,82);warehouse.name='Harbor Freight';scene.add(warehouse);addCollider(-145,82,30,24);addWindows(warehouse,30,11,24,520);addNeonPanel('HARBOR 17',-145,9,69.8,12,0xffb84a,0);
+  const colors=[0xc94f57,0x3e78b2,0xe3a83b,0x4c9a79,0x764ca5];
+  for(let row=0;row<3;row++)for(let col=0;col<4;col++){const x=-164+col*8,z=126+row*6;const container=makeBox(7,2.8,5,colors[(row+col)%colors.length],x,1.4,z);container.material.metalness=.2;scene.add(container);addCollider(x,z,7,5,.05);}
+  const crane=new THREE.Group();const tower=makeBox(1.4,28,1.4,0xe0a33a,0,14,0);const arm=makeBox(28,1,1,0xe0a33a,11,27,0);const cable=makeBox(.12,13,.12,0x1a1b20,20,19.5,0);crane.add(tower,arm,cable);crane.position.set(-158,0,146);scene.add(crane);
+  for(let x=-164;x<=-105;x+=12){const flood=makeBox(.3,10,.3,0x292d35,x,5,58);const light=makeBox(1.4,.35,.4,0xffe1a0,x,10,58);light.material.emissive=new THREE.Color(0xffd37a);light.material.emissiveIntensity=2;scene.add(flood,light);streetLights.push(light);}
+}
+
+function buildDowntownSkyline() {
+  const towers=[[-48,142,18,58,0x34395a],[-18,145,20,72,0x2d405c],[20,145,24,64,0x4a3659],[52,142,18,52,0x314957]];
+  towers.forEach(([x,z,w,h,c],i)=>{const tower=makeBox(w,h,17,c,x,h/2,z);scene.add(tower);addCollider(x,z,w,17);addWindows(tower,w,h,17,610+i);const antenna=makeBox(.22,9,.22,i%2?0xff3eb5:0x38e8ff,x,h+4.5,z);antenna.material.emissive=antenna.material.color.clone();antenna.material.emissiveIntensity=2;scene.add(antenna);streetLights.push(antenna);});
+}
+
+function buildBoardwalk() {
+  const walk=makeBox(12,.24,315,0xb98b5f,146,.12,0);walk.material.roughness=.9;scene.add(walk);
+  for(let z=-150;z<=150;z+=18){const rail=makeBox(.18,1.05,10,0xece3d2,151.5,.55,z);scene.add(rail);if(z%36===0)addStreetLight(147,z);}
+}
+
+function addCollider(x, z, w, d, padding = .3) {
+  collisionBoxes.push({ minX: x - w / 2 - padding, maxX: x + w / 2 + padding, minZ: z - d / 2 - padding, maxZ: z + d / 2 + padding });
+  const edge = 1.15;
+  coverPoints.push(
+    new THREE.Vector3(x-w/2-edge,0,z-d/2-edge), new THREE.Vector3(x+w/2+edge,0,z-d/2-edge),
+    new THREE.Vector3(x-w/2-edge,0,z+d/2+edge), new THREE.Vector3(x+w/2+edge,0,z+d/2+edge)
+  );
+}
+
+function collidesAt(x, z, radius = .55) {
+  const interiorCollision = interiorSystem?.collidesAt(x, z, radius);
+  if (interiorCollision !== null && interiorCollision !== undefined) return interiorCollision;
+  const onPier = x >= 150 - radius && x <= 206 + radius && z >= 117 - radius && z <= 133 + radius;
+  if (x < -176 + radius || ((!onPier) && x > 155 - radius) || z < -176 + radius || z > 176 - radius) return true;
+  for (const box of collisionBoxes) {
+    if (x + radius > box.minX && x - radius < box.maxX && z + radius > box.minZ && z - radius < box.maxZ) return true;
+  }
+  return false;
+}
+
+function createPlayer() {
+  playerActor = actorLibrary.create({ palette: ACTOR_PALETTES.player, scale: 1 });
+  const group = playerActor.root;
+  group.position.set(-130, 0, -118);
+  group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high'; o.receiveShadow = true; o.userData.player = true; } });
+  scene.add(group);
+  playerVelocity = new THREE.Vector3();
+  return group;
+}
+
+class Vehicle {
+  constructor(id, x, z, color = 0xe23d88, rotation = 0, type = 'sport') {
+    this.id = id;
+    this.mesh = new THREE.Group();
+    this.speed = 0;
+    this.rotation = rotation;
+    this.health = 100;
+    const profiles = {
+      sunset: { maxSpeed: 41, acceleration: 23, brake: 30, reverse: 13, turn: 2.15, grip: .86, mass: 1.0 },
+      ocean: { maxSpeed: 36, acceleration: 19, brake: 27, reverse: 12, turn: 1.92, grip: .94, mass: 1.18 },
+      van: { maxSpeed: 28, acceleration: 12.5, brake: 21, reverse: 10, turn: 1.38, grip: .97, mass: 1.75 },
+      police: { maxSpeed: 38, acceleration: 20, brake: 29, reverse: 12, turn: 1.85, grip: .92, mass: 1.3 },
+      exotic: { maxSpeed: 47, acceleration: 27, brake: 32, reverse: 14, turn: 2.3, grip: .88, mass: .94 },
+      muscle: { maxSpeed: 39, acceleration: 25, brake: 26, reverse: 13, turn: 1.78, grip: .78, mass: 1.28 },
+      limo: { maxSpeed: 31, acceleration: 14, brake: 23, reverse: 10, turn: 1.28, grip: .96, mass: 1.7 }
+    };
