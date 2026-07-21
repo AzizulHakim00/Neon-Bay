@@ -1,0 +1,52 @@
+  player.position.set(target.x,0,target.z);player.visible=true;v.occupied=false;state.activeVehicle=null;
+  dom.speedometer.classList.add('hidden');if(state.pointerLocked)dom.crosshair.classList.remove('hidden');
+  if(!force)audio.car();
+}
+
+function destroyVehicle(v) {
+  if(v.destroyed)return;v.destroyed=true;v.speed=0;
+  v.mesh.traverse(o=>{if(o.isMesh&&o.material?.color)o.material.color.multiplyScalar(.18);});
+  notify('Vehicle destroyed!',2);
+  if(state.activeVehicle===v){exitVehicle(true);damagePlayer(45);}
+}
+
+function nearestVehicle(radius=999) {
+  const p=getPlayerPosition();let best=null,bestD=radius;
+  vehicles.filter(v=>!v.destroyed&&!v.ai).forEach(v=>{const d=p.distanceTo(v.mesh.position);if(d<bestD){best=v;bestD=d;}});return best;
+}
+function nearestVehiclePosition(){return nearestVehicle()?.mesh.position||new THREE.Vector3(-108,0,-118);}
+function getVehicle(id){return vehicles.find(v=>v.id===id);}
+function vehicleDisplayName(v){return v.id==='taxi'?'Coastline Taxi':v.id==='infernus'?'Inferno ZX':v.id==='phoenix'?'Phoenix Muscle':v.id==='stretch'?'Vice Stretch':v.id==='cobalt'?'Cobalt Turbo':v.type==='van'?'Harbor Van':v.type==='exotic'?'Coastal Exotic':v.type==='muscle'?'Street Muscle':v.type==='limo'?'Luxury Limousine':v.id==='sunset'?'Sunset GT':v.id==='ocean'?'Oceanic Coupe':v.id?.startsWith('parked')?'Street Coupe':'Vehicle';}
+function getPlayerPosition(){return state.activeVehicle?state.activeVehicle.mesh.position:player.position;}
+
+function switchWeapon(type) {
+  if(!WEAPONS[type]||state.reloading||state.activeVehicle)return;
+  if(!state.ownedWeapons[type]){notify(`${WEAPONS[type].name} is not owned. Visit Coastline Arms.`,1.8);return;}
+  state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;
+  state.weapon=type;state.ammo=state.weaponData[type].ammo;state.reserve=state.weaponData[type].reserve;
+  playerActor?.setWeapon(type);dom.weaponName.textContent=WEAPONS[type].name;audio.tone(type==='shotgun'?180:type==='smg'?250:320,.08,'square',.06,80);notify(`${WEAPONS[type].name} equipped.`,1.2);
+}
+
+function cycleWeapon(){const order=['pistol','smg','shotgun'].filter(type=>state.ownedWeapons[type]);const index=order.indexOf(state.weapon);switchWeapon(order[(index+1)%order.length]);}
+
+function shoot() {
+  if(!state.running||state.paused||state.activeVehicle||state.reloading||state.cinematic)return;
+  const weapon=WEAPONS[state.weapon];
+  const now=performance.now();if(now-lastShotAt<weapon.cooldown)return;lastShotAt=now;
+  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Weapon empty. Press R to reload.',1.5);return;}
+  state.ammo--;progression.record('shotsFired');audio.shot();if(state.weapon==='shotgun'){audio.noise(.16,.3);cameraPitch=clamp(cameraPitch+.035,-.75,.32);}
+  playerActor?.playOneShot('Shoot',state.weapon==='shotgun'?.42:.28);
+  const targets=[];enemies.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  pedestrians.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  const damaged=new Map();
+  for(let pellet=0;pellet<weapon.pellets;pellet++){
+    const aim=new THREE.Vector2((random()-.5)*weapon.spread,(random()-.5)*weapon.spread);
+    raycaster.setFromCamera(aim,camera);const hit=raycaster.intersectObjects(targets,false)[0];
+    if(hit&&hit.distance<(state.weapon==='shotgun'?48:90)){const entity=hit.object.userData.entity;if(entity)damaged.set(entity,(damaged.get(entity)||0)+weapon.damage);}
+  }
+  damaged.forEach((damage,entity)=>{progression.record('hits');entity.takeDamage(entity.boss?damage*.72:damage);});
+  state.weaponData[state.weapon].ammo=state.ammo;
+  lastGunshotPosition=getPlayerPosition().clone();lastGunshotAt=worldTime;
+  raiseWanted('gunfire',state.wanted||1);
+}
+

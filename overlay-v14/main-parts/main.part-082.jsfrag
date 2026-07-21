@@ -1,0 +1,52 @@
+    if(state.cash>=180){const amount=state.weapon==='shotgun'?12:36;state.cash-=180;state.reserve+=amount;state.weaponData[state.weapon].reserve=state.reserve;audio.cash();notify(`Purchased ${amount} ${state.weapon==='shotgun'?'shells':'rounds'}.`,2);saveGame();}else notify('Not enough cash.',2);
+  } else if(candidate.type==='clinic'){
+    if(state.health>=100)notify('You are already healthy.',2);
+    else if(state.cash>=250){state.cash-=250;state.health=100;audio.cash();notify('Health restored.',2);saveGame();}else notify('Not enough cash.',2);
+  } else if(candidate.type==='garage'){
+    const nearVehicle=state.activeVehicle||nearestVehicle(7);
+    if(!nearVehicle)notify('Bring a vehicle closer.',2);
+    else if(nearVehicle.health>=100&&nearVehicle.engineHealth>=100&&nearVehicle.tireHealth>=100)notify('Vehicle does not need repairs.',2);
+    else if(state.cash>=300){state.cash-=300;resetVehicleDamage(nearVehicle);progression.record('vehiclesRepaired');audio.cash();notify('Vehicle repaired and bodywork restored.',2);saveGame();}else notify('Not enough cash.',2);
+  } else if(candidate.type==='side-taxi') startSideActivity('taxi');
+  else if(candidate.type==='side-race') startSideActivity('race');
+  else if(candidate.type==='purchase-nightclub') buyBusiness('nightclub');
+  else if(candidate.type==='purchase-taxi') buyBusiness('taxi');
+  else if(candidate.type==='purchase-garage') buyBusiness('garage');
+  else if(candidate.type==='buy-smg') buySMG();
+  else if(candidate.type==='apartment-save') saveGame();
+  else if(candidate.type==='wardrobe') cycleOutfit();
+  else if(candidate.type==='stats') showStats();
+  else if(candidate.type==='upgrade-engine') buyVehicleUpgrade('engine');
+  else if(candidate.type==='upgrade-brakes') buyVehicleUpgrade('brakes');
+  else if(candidate.type==='upgrade-grip') buyVehicleUpgrade('grip');
+  else if(candidate.type==='interior-door') {
+    enterInterior(candidate.object.interior);
+  } else if(candidate.type==='interior-exit') {
+    exitInterior();
+  }
+}
+
+function enterInterior(id) {
+  if(state.activeVehicle){notify('Exit the vehicle first.',1.8);return;}
+  const destination=interiorSystem?.enter(id,player.position);if(!destination)return;
+  state.currentInterior=id;player.position.copy(destination);playerVelocity.set(0,0,0);objectiveMarker.visible=false;
+  dom.interiorLabel.textContent=interiorSystem.label();dom.interiorLabel.classList.remove('hidden');notify(`Entered ${interiorSystem.label()}.`,1.8);
+}
+
+function exitInterior() {
+  const destination=interiorSystem?.exit();if(!destination)return;
+  state.currentInterior=null;player.position.copy(destination);playerVelocity.set(0,0,0);dom.interiorLabel.classList.add('hidden');updateMissionObjective();notify('Returned to Coastline District.',1.8);
+}
+
+
+function enterVehicle(vehicle) {
+  if(vehicle.destroyed)return;
+  state.activeVehicle=vehicle;vehicle.occupied=true;player.visible=false;
+  vehicle.speed=0;audio.car();dom.crosshair.classList.add('hidden');dom.speedometer.classList.remove('hidden');notify(`Driving ${vehicleDisplayName(vehicle)}. Press E to exit.`,2.2);
+}
+
+function exitVehicle(force=false) {
+  const v=state.activeVehicle;if(!v)return;
+  const side=new THREE.Vector3(Math.cos(v.rotation)*2.1,0,-Math.sin(v.rotation)*2.1);
+  let target=v.mesh.position.clone().add(side);
+  if(collidesAt(target.x,target.z,.55))target=v.mesh.position.clone().sub(side);

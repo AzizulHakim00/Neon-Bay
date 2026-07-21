@@ -1,0 +1,54 @@
+    for(let i=1;i<arr.length;i+=3){arr[i]-=dt*34;if(arr[i]<0)arr[i]=rand(35,58);}
+    rain.geometry.attributes.position.needsUpdate=true;
+  }
+  if(objectiveMarker?.visible){objectiveMarker.children[0].scale.setScalar(1+Math.sin(worldTime*3)*.08);}
+  if(activityMarker?.visible){activityMarker.children[0].scale.setScalar(1+Math.sin(worldTime*4)*.1);activityMarker.rotation.y+=dt*.35;}
+  interactables.forEach(i=>{if(i.marker)i.marker.rotation.y+=dt*.8;});
+  if(oceanSurface){oceanSurface.material.uniforms.uTime.value=worldTime;oceanSurface.material.uniforms.uRain.value=state.weather==='RAIN'?1:0;}
+  if(skyDome)skyDome.material.uniforms.time.value=worldTime;
+  updateDistrictDiscovery(dt);
+  updateBusinessEmpire(dt);
+}
+
+function updateLighting() {
+  const angle=(state.timeOfDay/24)*Math.PI*2-Math.PI/2;
+  const daylight=clamp(Math.sin(angle)*.8+.28,.08,1);
+  sun.position.set(Math.cos(angle)*110,Math.max(8,Math.sin(angle)*115),-45);
+  sun.intensity=.25+daylight*3.1;
+  hemi.intensity=.35+daylight*1.35;
+  const dayColor=new THREE.Color(0x5b8fd0),nightColor=new THREE.Color(0x071020),sunsetColor=new THREE.Color(0x9a4d78);
+  let sky=nightColor.clone().lerp(dayColor,daylight);
+  if(state.timeOfDay>17&&state.timeOfDay<20)sky.lerp(sunsetColor,.52);
+  if(state.weather!=='CLEAR')sky.multiplyScalar(.62);
+  scene.background.copy(sky);scene.fog.color.copy(sky);
+  if(skyDome){const mat=skyDome.material;mat.uniforms.topColor.value.copy(nightColor).lerp(dayColor,daylight*.75);mat.uniforms.horizonColor.value.copy(sunsetColor).lerp(dayColor,clamp(daylight-.2,0,1));mat.uniforms.lowerColor.value.set(state.weather==='RAIN'?0x080c17:0x1b0b2c);mat.uniforms.starStrength.value=clamp(1-daylight*1.4,0,1);}
+  if(sunDisc){sunDisc.position.copy(sun.position).normalize().multiplyScalar(410);sunDisc.material.opacity=state.weather==='CLEAR'?.85:.2;sunDisc.material.color.set(state.timeOfDay>17&&state.timeOfDay<20?0xff67ab:0xffcf83);}
+  if(oceanSurface)oceanSurface.material.uniforms.uDaylight.value=daylight;
+  const wet=state.weather==='RAIN'?1:0;roadMaterials.forEach(m=>{m.roughness=lerp(.92,.2,wet);m.metalness=lerp(.08,.34,wet);});
+  if(bloomPass)bloomPass.strength=(daylight<.4?state.quality==='high'?.9:.55:state.quality==='high'?.48:.28)+(wet*.12);
+  streetLights.forEach(l=>{if(l.material?.emissiveIntensity!==undefined)l.material.emissiveIntensity=daylight<.35?2.35:.22;});
+}
+
+function updateInteractions() {
+  if(!state.running||state.paused){dom.interaction.classList.add('hidden');return;}
+  const p=getPlayerPosition();
+  let candidate=null,dist=Infinity;
+  if(state.activeVehicle){candidate={type:'exit',label:'Exit vehicle',object:state.activeVehicle};dist=0;}
+  else {
+    vehicles.filter(v=>!v.ai&&!v.destroyed).forEach(v=>{const d=p.distanceTo(v.mesh.position);if(d<3.1&&d<dist){candidate={type:'vehicle',label:`Enter ${vehicleDisplayName(v)}`,object:v};dist=d;}});
+    interactables.forEach(item=>{
+      const allowed=!item.interiorOnly||state.currentInterior===item.interiorOnly;
+      if(item.marker)item.marker.visible=allowed;
+      if(!allowed)return;
+      const d=p.distanceTo(item.position);if(d<item.radius&&d<dist){candidate={type:item.type,label:item.label,object:item};dist=d;}
+    });
+  }
+  if(candidate){dom.interaction.classList.remove('hidden');dom.interactionText.textContent=candidate.label;dom.interaction.dataset.type=candidate.type;dom.interaction._candidate=candidate;}
+  else{dom.interaction.classList.add('hidden');dom.interaction._candidate=null;}
+  if(input.interactQueued){input.interactQueued=false;if(candidate)performInteraction(candidate);}
+}
+
+function performInteraction(candidate) {
+  if(candidate.type==='vehicle')enterVehicle(candidate.object);
+  else if(candidate.type==='exit')exitVehicle();
+  else if(candidate.type==='shop'){

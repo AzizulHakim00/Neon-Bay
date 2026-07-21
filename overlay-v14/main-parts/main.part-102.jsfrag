@@ -1,0 +1,41 @@
+  const move=e=>{if(e.pointerId!==activeId)return;const r=joystick.getBoundingClientRect();let dx=e.clientX-(r.left+r.width/2),dy=e.clientY-(r.top+r.height/2);const len=Math.hypot(dx,dy),max=r.width*.34;if(len>max){dx=dx/len*max;dy=dy/len*max;}knob.style.transform=`translate(${dx}px,${dy}px)`;input.mobileX=dx/max;input.mobileY=dy/max;};
+  joystick.addEventListener('pointerdown',e=>{activeId=e.pointerId;joystick.setPointerCapture(e.pointerId);move(e);});joystick.addEventListener('pointermove',move);
+  const end=e=>{if(e.pointerId!==activeId)return;activeId=null;knob.style.transform='';input.mobileX=0;input.mobileY=0;};joystick.addEventListener('pointerup',end);joystick.addEventListener('pointercancel',end);
+  document.querySelectorAll('.mobile-buttons button').forEach(btn=>{
+    btn.addEventListener('pointerdown',e=>{e.preventDefault();const a=btn.dataset.action;if(a==='fire')shoot();if(a==='jump')input.jumpQueued=true;if(a==='interact')input.interactQueued=true;if(a==='weapon')cycleWeapon();});
+  });
+  let lookId=null,lastX=0,lastY=0;
+  dom.canvas.addEventListener('pointerdown',e=>{if(!isTouch||e.clientX<innerWidth*.35)return;lookId=e.pointerId;lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointermove',e=>{if(e.pointerId!==lookId)return;cameraYaw-=(e.clientX-lastX)*.008*state.sensitivity;cameraPitch=clamp(cameraPitch-(e.clientY-lastY)*.006*state.sensitivity,-.75,.32);lastX=e.clientX;lastY=e.clientY;});
+  dom.canvas.addEventListener('pointerup',e=>{if(e.pointerId===lookId)lookId=null;});
+}
+
+function enterDemoInterior(index){const ids=['apartment','gunshop','garage','police'];const id=ids[index%ids.length];if(state.currentInterior===id)return;if(state.currentInterior)exitInterior();enterInterior(id);}
+function exitDemoInterior(){if(state.currentInterior)exitInterior();}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.05);
+  if(state.demoMode&&demoDirector){
+    demoDirector.update(dt,{camera,player,playerActor,vehicles,enemies,state,enterDemoInterior,exitDemoInterior});
+    vehicles.forEach(v=>v.update(dt));pedestrians.forEach(p=>p.actor?.update(dt,'Walk'));updateWorld(dt);drawMinimap();
+  } else if(state.cinematic){
+    updateCinematic(dt);updateWorld(dt);updateNotification(dt);drawMinimap();
+  } else if(state.running&&!state.paused&&!state.gameOver){
+    dialogue?.update(dt);updatePlayer(dt);updateAI(dt);updateCamera(dt);updateMission(dt);updateSideActivity(dt);updateWanted(dt);updateWorld(dt);updateInteractions();updateNotification(dt);updateHUD();drawMinimap();
+    if(input.fire)shoot();saveTimer+=dt;if(saveTimer>30){saveTimer=0;saveGame(true);}
+  } else if(scene){dialogue?.update(dt);updateCamera(dt);updateWorld(dt*.18);updateNotification(dt);drawMinimap();}
+  if(composer)composer.render();else renderer.render(scene,camera);
+}
+
+function startDemoMode(){
+  startMission(0,true);state.running=true;state.paused=false;hideAllScreens();dom.hud.classList.add('hidden');dom.mobile.classList.add('hidden');dom.demoCaption.classList.remove('hidden');
+  demoDirector=new DemoDirector({caption:dom.demoCaption,onFinish:()=>{}});
+}
+
+async function init() {
+  try{
+    state.quality=localStorage.getItem('neon-bay-quality')||'high';state.voiceEnabled=localStorage.getItem('neon-bay-voice')!=='false';
+    await actorLibrary.preload();
+    buildWorld();
+    await initPostFX();

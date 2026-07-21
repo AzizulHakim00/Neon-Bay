@@ -1,0 +1,73 @@
+  if(kind==='forward') return clamp((input.keys.has('KeyW')?1:0)+(input.keys.has('KeyS')?-1:0)-input.mobileY,-1,1);
+  return clamp((input.keys.has('KeyD')?1:0)+(input.keys.has('KeyA')?-1:0)+input.mobileX,-1,1);
+}
+
+function updateCamera(dt) {
+  const target=state.activeVehicle?state.activeVehicle.mesh.position:player.position;
+  const height=state.activeVehicle?2.4:1.65;
+  const distance=state.activeVehicle?10.5:cameraDistance;
+  const desired=new THREE.Vector3(
+    target.x+Math.sin(cameraYaw)*Math.cos(cameraPitch)*distance,
+    target.y+height-Math.sin(cameraPitch)*distance,
+    target.z+Math.cos(cameraYaw)*Math.cos(cameraPitch)*distance
+  );
+  camera.position.lerp(desired,1-Math.pow(.001,dt));
+  camera.lookAt(target.x,target.y+height,target.z);
+}
+
+function updateAI(dt) {
+  enemies.forEach(e=>e.update(dt));
+  pedestrians.forEach(e=>e.update(dt));
+  vehicles.forEach(v=>v.update(dt));
+}
+
+function updateWanted(dt) {
+  if(state.wanted>0){
+    const profile=wantedProfile(state.wanted);
+    state.wantedHeat-=dt;wantedSpawnTimer-=dt;state.wantedLastKnown.copy(getPlayerPosition());
+    if(wantedSearchMarker){wantedSearchMarker.visible=true;wantedSearchMarker.position.copy(state.wantedLastKnown);wantedSearchMarker.rotation.y+=dt*.4;}
+    if(wantedSpawnTimer<=0){
+      wantedSpawnTimer=clamp(13-state.wanted*2.1,4.5,10);
+      const pos=getPlayerPosition();const activePolice=enemies.filter(e=>e.police&&e.alive).length;
+      if(activePolice<profile.officers){const a=rand(0,Math.PI*2),r=rand(24,42);new CharacterAI(pos.x+Math.cos(a)*r,pos.z+Math.sin(a)*r,{police:true,health:82,role:'police'});}
+      if(policeCruisers.length<profile.cruisers)spawnPoliceCruiser();
+      if(state.wanted>=2)spawnRoadblock();
+    }
+    updateRoadblocks(dt);
+    const police=enemies.filter(e=>e.police&&e.alive);
+    const nearestPolice=Math.min(999,...police.map(e=>e.group.position.distanceTo(getPlayerPosition())));
+    const nearlyStopped=!state.activeVehicle||Math.abs(state.activeVehicle.speed)<2;
+    if(nearestPolice<2.7&&nearlyStopped){state.arrestProgress+=dt;if(state.arrestProgress>1&&Math.floor(state.arrestProgress*2)%2===0)notify(`Arrest in ${Math.max(0,Math.ceil(3-state.arrestProgress))}…`,.6);if(state.arrestProgress>=3)handleArrest();}
+    else state.arrestProgress=Math.max(0,state.arrestProgress-dt*2);
+    if(state.wantedHeat<=0&&nearestPolice>38){
+      state.wanted--;state.wantedHeat=state.wanted>0?wantedProfile(state.wanted).heat*.45:0;
+      if(state.wanted===0){progression.record('policeEscapes');awardReputation(25,'Police escape');clearRoadblocks();}
+      notify(state.wanted?'Police search reduced.':'You escaped the search zone.',2);
+    }
+  }else{
+    if(wantedSearchMarker)wantedSearchMarker.visible=false;state.arrestProgress=0;clearRoadblocks();
+    enemies.filter(e=>e.police).forEach(e=>{e.alive=false;scene.remove(e.group);});enemies=enemies.filter(e=>!e.police);
+    policeCruisers.forEach(v=>{scene.remove(v.mesh);vehicles=vehicles.filter(x=>x!==v);});policeCruisers=[];
+  }
+}
+
+function spawnPoliceCruiser() {
+  const p=getPlayerPosition(),a=rand(0,Math.PI*2),r=rand(38,50);
+  const v=new Vehicle(`police-${Date.now()}`,p.x+Math.cos(a)*r,p.z+Math.sin(a)*r,0x173c82,0,'police');
+  v.ai=true;policeCruisers.push(v);
+}
+
+function updateWorld(dt) {
+  worldTime+=dt;
+  state.timeOfDay=(state.timeOfDay+dt*.055)%24;
+  state.weatherTimer-=dt;
+  if(state.weatherTimer<=0){
+    state.weather=state.weather==='CLEAR'?(random()>.35?'RAIN':'OVERCAST'):'CLEAR';
+    state.weatherTimer=rand(55,95);notify(`Weather: ${state.weather}`,2);
+  }
+  updateLighting(dt);
+  updateTrafficSignals();
+  if(rain){
+    rain.visible=state.weather==='RAIN';
+    rain.position.copy(getPlayerPosition());
+    const arr=rain.geometry.attributes.position.array;
