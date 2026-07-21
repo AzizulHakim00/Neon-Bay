@@ -1,4 +1,4 @@
-name: Deploy Neon Bay v1.3 to GitHub Pages
+name: Deploy Neon Bay v1.4 to GitHub Pages
 
 on:
   push:
@@ -22,8 +22,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install
-      - run: npm run build
+          cache: npm
+      - name: Install dependencies
+        run: npm install --include=dev --no-package-lock
+      - name: Build Neon Bay v1.4
+        run: node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && npx vite build --base=./
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
