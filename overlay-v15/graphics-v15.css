@@ -1,0 +1,37 @@
+/* v1.5 cinematic graphics finish */
+#game-root::before,
+#game-root::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 45;
+}
+
+#game-root::before {
+  background:
+    radial-gradient(circle at 50% 44%, transparent 48%, rgba(2, 3, 10, .22) 78%, rgba(1, 2, 7, .52) 100%),
+    linear-gradient(180deg, rgba(255, 93, 181, .025), transparent 28%, transparent 72%, rgba(37, 174, 255, .025));
+  mix-blend-mode: multiply;
+}
+
+#game-root::after {
+  opacity: .055;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.1) 0, rgba(255,255,255,.1) 1px, transparent 1px, transparent 3px),
+    repeating-linear-gradient(90deg, rgba(255,79,183,.06) 0, rgba(255,79,183,.06) 1px, transparent 1px, transparent 4px);
+  animation: film-grain 8s steps(8) infinite;
+}
+
+@keyframes film-grain {
+  0% { transform: translate(0, 0); }
+  20% { transform: translate(-1%, 1%); }
+  40% { transform: translate(1%, -1%); }
+  60% { transform: translate(.5%, 1%); }
+  80% { transform: translate(-.5%, -.5%); }
+  100% { transform: translate(0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #game-root::after { animation: none; }
+}
