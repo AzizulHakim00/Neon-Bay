@@ -3,6 +3,9 @@
   "private": true,
   "version": "1.2.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "node scripts/apply-v12-build.mjs && vite --host 0.0.0.0",
     "build": "node scripts/apply-v12-build.mjs && vite build",
