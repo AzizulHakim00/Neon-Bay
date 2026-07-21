@@ -4,20 +4,22 @@
   "version": "1.2.0",
   "type": "module",
   "scripts": {
-    "dev": "bash scripts/apply-v12-build.sh && vite --host 0.0.0.0",
-    "build": "bash scripts/apply-v12-build.sh && vite build",
+    "dev": "node scripts/apply-v12-build.mjs && vite --host 0.0.0.0",
+    "build": "node scripts/apply-v12-build.mjs && vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "check": "bash scripts/apply-v12-build.sh && node --check src/main.js",
+    "check": "node scripts/apply-v12-build.mjs && node --check src/main.js",
     "test:modules": "node scripts/module-test.mjs",
     "test:smoke": "node scripts/smoke-test.mjs",
     "test:missions": "node scripts/mission-test.mjs",
-    "test": "bash scripts/apply-v12-build.sh && node --check src/main.js && npm run test:modules && npm run test:smoke && npm run test:missions && vite build"
+    "test": "node scripts/apply-v12-build.mjs && node --check src/main.js && npm run test:modules && npm run test:smoke && npm run test:missions && vite build"
   },
   "dependencies": {
     "three": "^0.179.1"
   },
   "devDependencies": {
     "jsdom": "^29.1.1",
-    "vite": "^7.0.5"
+    "tar-stream": "^3.1.7",
+    "vite": "^7.0.5",
+    "xz-decompress": "^0.2.3"
   }
 }
