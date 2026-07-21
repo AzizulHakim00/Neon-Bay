@@ -1,6 +1,6 @@
 {
-  "installCommand": "npm install",
-  "buildCommand": "npm run build",
+  "installCommand": "npm install --include=dev --no-package-lock",
+  "buildCommand": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && npx vite build",
   "outputDirectory": "dist",
   "framework": "vite"
 }
