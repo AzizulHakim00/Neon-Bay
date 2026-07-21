@@ -1,0 +1,236 @@
+    this.health = options.health || (this.boss ? 250 : this.passive ? 25 : 70);
+    this.speed = options.speed || (this.boss ? 7 : this.passive ? 2.2 : 5.2);
+    this.shootCooldown = rand(.3, 1.2);
+    this.wanderAngle = rand(0, Math.PI * 2);
+    this.wanderTimer = rand(1, 4);
+    this.stationary = !!options.stationary;
+    this.role = options.role || (this.police ? 'police' : this.passive ? 'civilian' : 'gang');
+    this.routine = options.routine || (this.passive && !this.stationary ? makeSidewalkRoutine(x,z,rand(12,28)) : null);
+    this.routineIndex = 0;
+    this.routineWait = rand(0,2.5);
+    this.reportTimer = 0;
+    this.reportedCrime = false;
+    this.populationVisible = true;
+    this.scheduleSeed = rand(0,1);
+    this.aiState = this.passive ? 'routine' : 'patrol';
+    this.searchTimer = 0;
+    this.lastSeen = new THREE.Vector3(x, 0, z);
+    this.coverPoint = null;
+    this.fleeTimer = 0;
+    const civilianPalette = ACTOR_PALETTES.civilians[Math.floor(rand(0, ACTOR_PALETTES.civilians.length))];
+    const palette = this.police ? ACTOR_PALETTES.police : this.passive ? civilianPalette : this.boss ? ACTOR_PALETTES.boss : ACTOR_PALETTES.enemy;
+    this.actor = actorLibrary.create({ palette, scale: this.boss ? 1.16 : .93, entity: this });
+    this.group = this.actor.root;
+    this.actor.setEntity(this);
+    this.group.position.set(x, 0, z);
+    scene.add(this.group);
+    if (this.passive) pedestrians.push(this); else enemies.push(this);
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (this.passive) return this.updateWander(dt);
+    const target = getPlayerPosition();
+    const distance = this.group.position.distanceTo(target);
+    const canSee = !state.currentInterior && distance < (this.police ? 78 : 62);
+    if (this.police && canSee) state.wantedLastKnown.copy(target);
+    if (canSee) {
+      this.aiState = 'alert';
+      this.searchTimer = this.boss ? 9 : 6;
+      this.lastSeen.copy(target);
+    } else if (this.aiState !== 'patrol') {
+      this.searchTimer -= dt;
+      this.aiState = this.searchTimer > 0 ? 'search' : 'patrol';
+    }
+
+    if (this.aiState === 'patrol') {
+      this.actor.update(dt, 'Idle');
+      return;
+    }
+
+    const destination = this.aiState === 'search' ? this.lastSeen : target;
+    if (!this.coverPoint || this.group.position.distanceTo(this.coverPoint) < 1 || this.coverPoint.distanceTo(target) < 5) {
+      this.coverPoint = this.chooseCover(target);
+    }
+    const shouldCover = this.coverPoint && (this.health < (this.boss ? 150 : 48) || distance < 20);
+    const moveTarget = shouldCover ? this.coverPoint : destination;
+    const moveDistance = this.group.position.distanceTo(moveTarget);
+    if (moveDistance > (shouldCover ? 1.2 : this.boss ? 9 : 12)) {
+      this.moveToward(moveTarget, dt, shouldCover ? this.speed * .9 : this.speed);
+      this.actor.update(dt, 'Run');
+    } else {
+      const offset = tmpV.copy(target).sub(this.group.position);
+      this.group.rotation.y = Math.atan2(offset.x, offset.z);
+      this.actor.update(dt, canSee ? 'Aim' : 'Idle');
+    }
+
+    this.shootCooldown -= dt;
+    if (canSee && distance < (this.boss ? 38 : 29) && this.shootCooldown <= 0) {
+      const coverBonus = shouldCover && moveDistance < 1.8 ? .72 : 1;
+      damagePlayer((this.boss ? rand(9,15) : rand(5,10)) * coverBonus);
+      audio.tone(this.police ? 320 : 260, .07, 'square', .06, -100);
+      this.actor.playOneShot('Shoot', .26);
+      this.shootCooldown = this.boss ? .62 : rand(1.1,2.1);
+    }
+  }
+
+  moveToward(target, dt, speed) {
+    const offset = tmpV.copy(target).sub(this.group.position);
+    if (offset.lengthSq() < .01) return;
+    offset.normalize();
+    this.group.rotation.y = Math.atan2(offset.x, offset.z);
+    const nx = this.group.position.x + offset.x * speed * dt;
+    const nz = this.group.position.z + offset.z * speed * dt;
+    if (!collidesAt(nx, nz, .45)) { this.group.position.x = nx; this.group.position.z = nz; }
+    else this.group.rotation.y += rand(-1.3,1.3);
+  }
+
+  chooseCover(target) {
+    let best = null, bestScore = Infinity;
+    for (const point of coverPoints) {
+      const toActor = point.distanceTo(this.group.position);
+      if (toActor > 25) continue;
+      const toTarget = point.distanceTo(target);
+      const score = toActor + Math.abs(toTarget - 18) * .3 + rand(0,2);
+      if (score < bestScore) { best = point; bestScore = score; }
+    }
+    return best?.clone() || null;
+  }
+
+  updateWander(dt) {
+    const hour=state.timeOfDay;
+    const populationFactor=(hour>7&&hour<23?1:.58)*(state.weather==='RAIN'?.72:1);
+    this.populationVisible=this.stationary||this.scheduleSeed<populationFactor;
+    this.group.visible=this.populationVisible;
+    if(!this.populationVisible)return;
+    const danger=lastGunshotPosition&&worldTime-lastGunshotAt<9&&this.group.position.distanceTo(lastGunshotPosition)<42;
+    if(danger){
+      this.fleeTimer=4.5;
+      this.reportTimer+=dt;
+      const away=tmpV.copy(this.group.position).sub(lastGunshotPosition).normalize();
+      const destination=this.group.position.clone().addScaledVector(away,14);
+      this.moveToward(destination,dt,this.speed*2.25);
+      this.actor.update(dt,'Run');
+      if(this.reportTimer>1.35&&!this.reportedCrime){this.reportedCrime=true;raiseWanted('witness',1);notify('A civilian reported the gunfire.',1.8);}
+      return;
+    }
+    this.reportTimer=0;
+    if(this.stationary){this.actor.update(dt,this.role==='vendor'?'Talk':'Idle');return;}
+    if(!this.routine?.length){this.actor.update(dt,'Idle');return;}
+    if(this.routineWait>0){this.routineWait-=dt;this.actor.update(dt,this.role==='social'?'Talk':'Idle');return;}
+    const destination=this.routine[this.routineIndex];
+    if(this.group.position.distanceTo(destination)<1.1){
+      this.routineIndex=(this.routineIndex+1)%this.routine.length;
+      this.routineWait=rand(.8,3.2);
+      this.actor.update(dt,this.role==='social'?'Talk':'Idle');
+      return;
+    }
+    this.moveToward(destination,dt,this.speed);
+    this.actor.update(dt,'Walk');
+  }
+  takeDamage(amount, vehicleHit = false) {
+    if (!this.alive) return;
+    this.health -= amount;
+    audio.hit();
+    flashMesh(this.group, 0xffffff);
+    if (!this.passive && !this.police) {
+      raiseWanted('assault',1);
+    }
+    if (this.passive) {
+      raiseWanted('civilian',2);
+      this.passive = false;
+    }
+    if (this.health <= 0) this.die(vehicleHit);
+  }
+  die() {
+    this.alive = false;
+    if (this.missionTarget) state.missionKills++;
+    if (this.police) { raiseWanted('officer',3); }
+    this.actor.playOneShot('Cower', .6);
+    this.group.rotation.z = Math.PI / 2;
+    this.group.position.y = .35;
+    setTimeout(() => {
+      scene.remove(this.group);
+      enemies = enemies.filter(e => e !== this);
+      pedestrians = pedestrians.filter(e => e !== this);
+    }, 1800);
+  }
+}
+
+function rotateToward(current, target, maxDelta) {
+  let delta = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (delta < -Math.PI) delta += Math.PI * 2;
+  return current + clamp(delta, -maxDelta, maxDelta);
+}
+
+function flashMesh(group, color) {
+  const originals = [];
+  group.traverse(o => {
+    if (o.isMesh && o.material?.color) { originals.push([o, o.material.color.getHex()]); o.material.color.setHex(color); }
+  });
+  setTimeout(() => originals.forEach(([o, c]) => o.material?.color?.setHex(c)), 70);
+}
+
+function raiseWanted(reason='crime',minimum=1){
+  const previous=state.wanted;
+  state.wanted=clamp(Math.max(state.wanted,minimum),0,3);
+  const profile=wantedProfile(state.wanted);
+  state.wantedHeat=Math.max(state.wantedHeat,profile.heat);
+  state.wantedLastKnown.copy(getPlayerPosition());
+  if(state.wanted>previous)notify(`${profile.label}: police response upgraded.`,2.2);
+  if(reason==='gunfire')state.wantedHeat=Math.max(state.wantedHeat,18);
+}
+
+function awardReputation(amount,label='Street reputation'){
+  const result=progression.addReputation(amount);
+  notify(`${label} +${result.amount} REP${result.tierChanged?` · ${result.after}`:''}`,2.4);
+}
+
+function clearRoadblocks(){
+  roadblocks.forEach(block=>scene.remove(block.group));roadblocks=[];
+}
+
+function spawnRoadblock(){
+  if(roadblocks.length>=2)return;
+  const p=getPlayerPosition();
+  const road=CONFIG.roadCenters.reduce((best,c)=>Math.abs(c-p.z)<Math.abs(best-p.z)?c:best,CONFIG.roadCenters[0]);
+  const x=clamp(Math.round((p.x+42)/60)*60,-120,120);
+  const group=new THREE.Group();
+  const barrier=makeBox(10,.7,.8,0xf4e7d0,0,.35,0);const stripe=makeBox(9.5,.12,.84,0xff334f,0,.5,0);group.add(barrier,stripe);
+  for(const sx of [-4.5,4.5]){const lamp=makeBox(.32,.32,.32,0x398cff,sx,1,0);lamp.material.emissive=new THREE.Color(0x398cff);lamp.material.emissiveIntensity=2;group.add(lamp);}
+  group.position.set(x,0,road);scene.add(group);roadblocks.push({group,life:34});
+}
+
+function updateRoadblocks(dt){
+  roadblocks.forEach(block=>{
+    block.life-=dt;block.group.children.forEach((child,index)=>{if(child.material?.emissive)child.material.emissiveIntensity=1.2+Math.sin(worldTime*10+index)*.9;});
+    if(state.activeVehicle&&state.activeVehicle.mesh.position.distanceTo(block.group.position)<4&&Math.abs(state.activeVehicle.speed)>7){
+      applyVehicleImpact(state.activeVehicle,15,'tires');state.activeVehicle.speed*=.45;notify('Spike strip damaged the tires!',1.8);block.life=0;
+    }
+  });
+  roadblocks.filter(block=>block.life<=0).forEach(block=>scene.remove(block.group));
+  roadblocks=roadblocks.filter(block=>block.life>0);
+}
+
+function handleArrest(){
+  state.arrestProgress=0;state.wanted=0;state.wantedHeat=0;clearRoadblocks();
+  const fine=Math.min(900,Math.max(150,Math.round(state.cash*.15)));state.cash=Math.max(0,state.cash-fine);
+  if(state.activeVehicle)exitVehicle(true);
+  player.position.set(94,0,80);state.health=Math.max(55,state.health);notify(`Arrested. Police fine: $${fine}.`,3);saveGame(true);
+}
+
+function activityTarget(){
+  if(state.activeActivity==='taxi')return state.activityStage===0?SIDE_ACTIVITY_DEFINITIONS.taxi.pickup:SIDE_ACTIVITY_DEFINITIONS.taxi.dropoff;
+  if(state.activeActivity==='race')return SIDE_ACTIVITY_DEFINITIONS.race.checkpoints[state.activityCheckpoint];
+  return null;
+}
+
+function startSideActivity(type){
+  if(state.activeActivity){notify('Finish the current side activity first.',2);return;}
+  const def=SIDE_ACTIVITY_DEFINITIONS[type];if(!def)return;
+  if(type==='race'&&!state.activeVehicle){notify('Enter a vehicle before starting the race.',2);return;}
+  state.activeActivity=type;state.activityStage=0;state.activityCheckpoint=type==='race'?1:0;state.activityTimer=def.time;
+  const target=activityTarget();activityMarker.visible=true;activityMarker.position.copy(target);
+  dom.activityCard?.classList.remove('hidden');notify(`${def.name} started.`,2);updateActivityHUD();
+}
+
+function cancelSideActivity(message='Side activity cancelled.'){
