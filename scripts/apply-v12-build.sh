@@ -7,7 +7,13 @@ fi
 
 tmp_archive="$(mktemp)"
 cat release-v1.2-lite.part-* | base64 --decode > "$tmp_archive"
-tar -xJf "$tmp_archive" -C .
+python3 - "$tmp_archive" <<'PY'
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], mode='r:xz') as archive:
+    archive.extractall('.')
+PY
 rm -f "$tmp_archive"
 
 mkdir -p public/models
