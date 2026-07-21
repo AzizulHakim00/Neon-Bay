@@ -28,13 +28,20 @@ if (payload.version !== '1.3.0' || !payload.files) {
   throw new Error('Invalid Neon Bay v1.3 release payload');
 }
 
+// Vercel installs dependencies before this reconstruction step. Preserve the
+// root deployment manifests so the dependency graph cannot change mid-build.
+const preserve = new Set(['package.json', 'package-lock.json', 'vercel.json']);
+let written = 0;
+
 for (const [relativePath, content] of Object.entries(payload.files)) {
+  if (preserve.has(relativePath)) continue;
   const target = path.resolve(root, relativePath);
   if (!target.startsWith(`${root}${path.sep}`)) {
     throw new Error(`Unsafe release path: ${relativePath}`);
   }
   fs.mkdirSync(path.dirname(target), { recursive: true });
   fs.writeFileSync(target, content, 'utf8');
+  written += 1;
 }
 
-console.log(`Applied Neon Bay ${payload.version}: ${Object.keys(payload.files).length} files`);
+console.log(`Applied Neon Bay ${payload.version}: ${written} files (deployment manifests preserved)`);
