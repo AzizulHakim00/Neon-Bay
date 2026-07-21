@@ -1,22 +1,31 @@
-# Neon Bay v1.4 — Vice Coast
+# Neon Bay v1.5 — Graphics & World Overhaul
 
-**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.4 expands the project into a ten-mission, 1980s-inspired coastal crime adventure with a denser city, stronger graphics, businesses, radio stations, a phone/map interface and a second story chapter.
+**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.5 expands the ten-mission Vice Coast release with a substantial graphics and world-detail upgrade while preserving its businesses, radio stations, phone/map interface, side activities and save data.
 
 The release takes inspiration from the atmosphere of classic tropical open-world games, but all branding, characters, districts, missions, music, dialogue and low-poly artwork are original. It does not copy GTA: Vice City maps, characters, logos, music, scripts or proprietary assets.
 
-## v1.4 graphics upgrade
+## v1.5 visual overhaul
+
+- Ultra graphics preset with higher effect density
+- Clearcoat vehicle paint, improved glass and dynamic night headlights
+- Rain-responsive puddles, neon reflections and adaptive weather fog
+- Animated beach foam, atmospheric particles and denser street props
+- Bullet tracers, muzzle flashes, impact sparks and camera shake
+- Cinematic exposure, vignette and subtle film-grain presentation
+
+## v1.4 Vice Coast foundation
 
 - Unreal Bloom post-processing on supported devices
 - Animated shader ocean with waves, foam, reflections and rain response
 - Gradient sunset/night sky with stars and a moving sun disc
 - Wet-road material response during rain
 - Stronger neon signs, nightlife lighting and retro screen treatment
-- New Starfall Nightclub exterior and playable interior
-- New Harbor District with warehouses, cargo containers, floodlights and crane
+- Starfall Nightclub exterior and playable interior
+- Harbor District with warehouses, cargo containers, floodlights and crane
 - Expanded Downtown skyline and Vice Point resort area
-- New palm-lined boardwalk along the beach
-- Higher-density traffic with fourteen active route vehicles
-- Four additional vehicle classes: exotic, muscle, limousine and turbo coupe
+- Palm-lined boardwalk along the beach
+- Fourteen active route-driven traffic vehicles
+- Exotic, muscle, limousine and turbo coupe vehicle classes
 
 ## Vice Coast systems
 
@@ -81,11 +90,11 @@ npm run dev
 npm test
 ```
 
-The automated suite validates JavaScript syntax, seven character animation clips, five playable interiors, vehicle damage, living-city systems, Vice Coast businesses and radio, save v4, all ten mission flows, collision reachability and the production Vite build.
+The automated suite validates JavaScript syntax, seven character animation clips, five playable interiors, vehicle damage, living-city systems, Vice Coast businesses and radio, graphics profiles, save v4, all ten mission flows, collision reachability and the production Vite build.
 
 ## Performance
 
-Graphics presets adjust pixel density, shadows and bloom strength. Low mode disables post-processing. Bloom modules are dynamically loaded, so unsupported browsers fall back to direct rendering.
+Low mode disables the most expensive atmosphere and lighting effects. Medium, High and Ultra progressively increase pixel density, shadows, particles, puddles, light pools and post-processing strength. Unsupported browsers fall back to direct rendering.
 
 ## Deployment
 
@@ -96,4 +105,4 @@ Graphics presets adjust pixel density, shadows and bloom strength. Low mode disa
 
 ## Legal and scope
 
-All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.4 focuses on a dense, playable tropical city and strong game systems rather than copying another game's content.
+All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.5 focuses on a dense tropical city, improved visual feedback and scalable browser performance rather than copying another game's content.
