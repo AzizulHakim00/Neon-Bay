@@ -1,8 +1,20 @@
-# Neon Bay v1.5 — Graphics & World Overhaul
+# Neon Bay v1.6 — Cinematic City Overhaul
 
-**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.5 expands the ten-mission Vice Coast release with a substantial graphics and world-detail upgrade while preserving its businesses, radio stations, phone/map interface, side activities and save data.
+**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.6 turns the ten-mission Vice Coast release into a more cinematic, materially detailed city with improved lighting, roads, vehicles, weather, windows, shoreline effects and mission presentation while preserving save schema v4.
 
 The release takes inspiration from the atmosphere of classic tropical open-world games, but all branding, characters, districts, missions, music, dialogue and low-poly artwork are original. It does not copy GTA: Vice City maps, characters, logos, music, scripts or proprietary assets.
+
+
+## v1.6 cinematic city overhaul
+
+- Procedural textured roads and façades with cracks, wear, bump detail and gradual wetness
+- Living windows with fake rooms and time-based office, hotel and residential lighting
+- Moving sunlight, quality-scaled soft shadows and grounded contact shadows
+- SSAO, FXAA, cinematic color grading, vignette, grain and cutscene focus treatment
+- Crosswalks, manholes, drains, skid marks, wet shoreline sand and footprints
+- Dynamic clouds, storm lightning and local rain ripples
+- Vehicle reverse lights, indicators, dashboard glow, exhaust and tire effects
+- Animated chapter and mission title cards across all ten jobs
 
 ## v1.5 visual overhaul
 
@@ -20,19 +32,25 @@ The release takes inspiration from the atmosphere of classic tropical open-world
 - Gradient sunset/night sky with stars and a moving sun disc
 - Wet-road material response during rain
 - Stronger neon signs, nightlife lighting and retro screen treatment
-- Starfall Nightclub exterior and playable interior
-- Harbor District with warehouses, cargo containers, floodlights and crane
+- New Starfall Nightclub exterior and playable interior
+- New Harbor District with warehouses, cargo containers, floodlights and crane
 - Expanded Downtown skyline and Vice Point resort area
-- Palm-lined boardwalk along the beach
-- Fourteen active route-driven traffic vehicles
-- Exotic, muscle, limousine and turbo coupe vehicle classes
+- New palm-lined boardwalk along the beach
+- Higher-density traffic with fourteen active route vehicles
+- Four additional vehicle classes: exotic, muscle, limousine and turbo coupe
 
 ## Vice Coast systems
 
 - Ten connected story missions across two chapters
-- Three original procedural radio stations: Flashwave 86, Sunset FM and Nightdrive
+- Three original procedural radio stations:
+  - Flashwave 86
+  - Sunset FM
+  - Nightdrive
 - In-game phone with city map, district, business, reputation and story information
-- Three purchasable businesses with periodic income
+- Three purchasable businesses with periodic income:
+  - Starfall Nightclub
+  - Coastline Cabs
+  - Vice Coast Customs
 - VICE SMG weapon with separate ammunition and ownership state
 - Five usable interiors: apartment, gun shop, garage, police station and nightclub
 - Five districts: Ocean Drive, Vice Point, Harbor District, Downtown and Little Bay
@@ -90,11 +108,24 @@ npm run dev
 npm test
 ```
 
-The automated suite validates JavaScript syntax, seven character animation clips, five playable interiors, vehicle damage, living-city systems, Vice Coast businesses and radio, graphics profiles, save v4, all ten mission flows, collision reachability and the production Vite build.
+The automated suite validates:
+
+- JavaScript syntax
+- Seven character animation clips
+- Five playable interiors
+- Vehicle damage and repair
+- Living-city traffic, wanted and progression systems
+- Vice Coast businesses, districts, radio stations and Chapter Two definitions
+- Save v4, SMG purchase, nightclub purchase, phone, radio and pause/resume smoke flows
+- All ten story mission flows
+- Mission checkpoint collision reachability
+- Production Vite build
+
+The source build generates `dist/`. Vercel serves the verified browser-ready release from `vercel-static/` without running a remote build.
 
 ## Performance
 
-Low mode disables the most expensive atmosphere and lighting effects. Medium, High and Ultra progressively increase pixel density, shadows, particles, puddles, light pools and post-processing strength. Unsupported browsers fall back to direct rendering.
+Low, Medium, High and Ultra presets scale shadows, SSAO, FXAA, wetness, clouds, rain ripples, living windows, vehicle effects and cinematic post-processing. Expensive effects are reduced or disabled on lower presets, while unsupported post-processing falls back to direct rendering.
 
 ## Deployment
 
@@ -105,4 +136,4 @@ Low mode disables the most expensive atmosphere and lighting effects. Medium, Hi
 
 ## Legal and scope
 
-All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.5 focuses on a dense tropical city, improved visual feedback and scalable browser performance rather than copying another game's content.
+All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.6 focuses on an original cinematic tropical city, scalable browser graphics and strong game systems rather than copying another game's content.
