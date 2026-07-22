@@ -1,0 +1,38 @@
+0x0a101d,-5,1.7,-7.7);screen.material.emissive.setHex(0x3b75a0);screen.material.emissiveIntensity=.8;
+    } else if(id==='gunshop'){
+      furniture(8,1.1,1.2,0x4a342e,0,.55,3); for(let x=-8;x<=8;x+=4)furniture(2.4,2.2,.5,0x252a35,x,1.1,-7.7);
+      for(let x=-7;x<=7;x+=3.5){const gun=furniture(1.7,.12,.18,0x171a20,x,1.6,-7.35);gun.material.metalness=.7;}
+    } else if(id==='garage'){
+      furniture(7,.35,3,0x2b3039,0,.18,0); furniture(5,1.1,1.3,0x38414a,-8,.55,5); furniture(5,2.6,.8,0x26313d,9,1.3,-8.8);
+      for(const x of [-8,8]){const lift=furniture(.35,3,.35,0xffb33b,x,1.5,-1);lift.material.emissive.setHex(0x3a2100);}
+    } else if(id==='police') {
+      furniture(7,1.05,1.2,0x2e3a52,0,.53,3); furniture(3,2.2,.7,0x263246,-8,1.1,-8.8); furniture(3,2.2,.7,0x263246,8,1.1,-8.8);
+      for(let x=-7;x<=7;x+=3.5)furniture(1.6,.65,1.6,0x39465e,x,.33,-2);
+    } else {
+      furniture(11,.8,2.2,0x4f294f,0,.4,7.5);
+      const dance=furniture(13,.16,9,0x17152b,0,.08,-2);dance.material.emissive.setHex(0x3b1458);dance.material.emissiveIntensity=.8;
+      for(let x=-5;x<=5;x+=5)for(let z=-5;z<=1;z+=3){const tile=furniture(2.2,.05,2.2,(x+z)%2?0xff3eb5:0x3de8ff,x,.18,z);tile.material.emissive.setHex((x+z)%2?0xff3eb5:0x3de8ff);tile.material.emissiveIntensity=1.4;}
+      for(const x of [-12,12]){const speaker=furniture(2.2,3,1.6,0x12131c,x,1.5,-7);speaker.material.emissive.setHex(0x281840);speaker.material.emissiveIntensity=.5;}
+      for(let x=-12;x<=12;x+=4){const rail=furniture(2.8,.7,.7,0x273048,x,.35,10);rail.material.metalness=.35;}
+    }
+    const exitPos=new THREE.Vector3(cx,0,cz+d/2-2.2);
+    const exitMarker=new THREE.Mesh(new THREE.TorusGeometry(1,.1,8,28),new THREE.MeshBasicMaterial({color:0x66f6ff}));exitMarker.rotation.x=Math.PI/2;exitMarker.position.copy(exitPos).sub(new THREE.Vector3(cx,0,cz));exitMarker.position.y=.12;group.add(exitMarker);
+    group.position.set(cx,0,cz);this.scene.add(group);
+    this.colliders.set(id,{bounds:{minX:cx-w/2+.7,maxX:cx+w/2-.7,minZ:cz-d/2+.7,maxZ:cz+d/2-.7},items:colliders,spawn:new THREE.Vector3(cx,0,cz+d/2-3.5),exit:exitPos,label:def.label});
+    this.entries.push({id:`${id}-exit`,type:'interior-exit',interior:id,label:'Return to Vice Coast',position:exitPos,radius:3,color:0x66f6ff});
+  }
+
+  enter(id, playerPosition) {
+    const room=this.colliders.get(id); if(!room)return null;
+    this.returnPosition=playerPosition.clone(); this.current=id; return room.spawn.clone();
+  }
+  exit() { const destination=this.returnPosition?.clone(); this.current=null; this.returnPosition=null; return destination; }
+  label() { return this.current ? this.colliders.get(this.current)?.label : ''; }
+  collidesAt(x,z,radius=.55) {
+    if(!this.current)return null;
+    const room=this.colliders.get(this.current),b=room.bounds;
+    if(x-radius<b.minX||x+radius>b.maxX||z-radius<b.minZ||z+radius>b.maxZ)return true;
+    return room.items.some(box=>x+radius>box.minX&&x-radius<box.maxX&&z+radius>box.minZ&&z-radius<box.maxZ);
+  }
+  isInsidePosition(position) { return this.current && this.colliders.get(this.current)?.bounds && position.x>440; }
+}
