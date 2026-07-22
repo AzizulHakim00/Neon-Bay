@@ -1,7 +1,8 @@
 {
   "name": "Neon Bay",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "deployment": "verified-browser-modules",
   "engineParts": 22,
-  "files": 42
+  "patches": 14,
+  "files": 44
 }

@@ -6,6 +6,7 @@ on:
     paths:
       - 'vercel-static/**'
       - 'scripts/verify-vercel-static.mjs'
+      - 'scripts/verify-vercel-static-v16.mjs'
       - 'vercel.json'
   workflow_dispatch:
 
@@ -16,11 +17,11 @@ jobs:
   verify-static-release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repair branch
+      - name: Check out release branch
         uses: actions/checkout@v4
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify browser-ready v1.5 release
-        run: node scripts/verify-vercel-static.mjs vercel-static
+      - name: Verify browser-ready v1.6 release
+        run: node --experimental-vm-modules scripts/verify-vercel-static.mjs vercel-static
