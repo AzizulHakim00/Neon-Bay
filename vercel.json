@@ -3,6 +3,5 @@
   "framework": null,
   "installCommand": "",
   "buildCommand": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/prepare-vercel-static.mjs",
-  "outputDirectory": "vercel-static",
-  "public": true
+  "outputDirectory": "vercel-static"
 }
