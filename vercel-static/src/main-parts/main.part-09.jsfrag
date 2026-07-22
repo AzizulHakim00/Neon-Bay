@@ -1,0 +1,127 @@
+02d, 1.75);
+  scene.add(hemi);
+  sun = new THREE.DirectionalLight(0xffd0a1, 3.2);
+  sun.position.set(80, 110, -50);
+  sun.castShadow = state.quality === 'high' || state.quality === 'ultra';
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -110; sun.shadow.camera.right = 110; sun.shadow.camera.top = 110; sun.shadow.camera.bottom = -110;
+  scene.add(sun);
+
+  visualOverhaul = new GraphicsOverhaul({ scene, camera, renderer, quality: state.quality, random, testMode: !!globalThis.__NEON_BAY_TEST__ }).build();
+
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(360, 360), material(0x314b3b, 1));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+  const beach = new THREE.Mesh(new THREE.PlaneGeometry(45, 360), material(0xc7a86f, 1));
+  beach.rotation.x = -Math.PI / 2; beach.position.set(157, .015, 0); beach.receiveShadow = true; scene.add(beach);
+  buildSkyDome();
+  buildOceanSurface();
+
+  buildRoads();
+  buildTrafficSignals();
+  buildBuildings();
+  buildOceanDrive();
+  buildViceCoastDistricts();
+  buildDecorations();
+  buildVehicles();
+  buildPopulation();
+  interiorSystem = new InteriorSystem(scene);
+  buildInteractables();
+  buildRain();
+  objectiveMarker = buildMarker(0xff3eb5);
+  objectiveMarker.visible = false;
+  activityMarker = buildMarker(0x35f2ad); activityMarker.visible=false;
+  wantedSearchMarker = buildSearchMarker(); wantedSearchMarker.visible=false;
+  player = createPlayer();
+  updateLighting(0);
+}
+
+function buildRoads() {
+  const roadMat = material(0x232733, .96); roadMat.metalness=.08; roadMaterials.push(roadMat); visualOverhaul?.registerRoadMaterial(roadMat);
+  const lineMat = new THREE.MeshBasicMaterial({ color: 0xffd76b });
+  for (const c of CONFIG.roadCenters) {
+    const horizontal = new THREE.Mesh(new THREE.PlaneGeometry(360, CONFIG.roadWidth), roadMat);
+    horizontal.rotation.x = -Math.PI / 2; horizontal.position.set(0, .025, c); horizontal.receiveShadow = true; scene.add(horizontal);
+    const vertical = new THREE.Mesh(new THREE.PlaneGeometry(CONFIG.roadWidth, 360), roadMat);
+    vertical.rotation.x = -Math.PI / 2; vertical.position.set(c, .028, 0); vertical.receiveShadow = true; scene.add(vertical);
+    const hLine = new THREE.Mesh(new THREE.PlaneGeometry(360, .14), lineMat); hLine.rotation.x = -Math.PI/2; hLine.position.set(0,.04,c); scene.add(hLine);
+    const vLine = new THREE.Mesh(new THREE.PlaneGeometry(.14, 360), lineMat); vLine.rotation.x = -Math.PI/2; vLine.position.set(c,.041,0); scene.add(vLine);
+  }
+}
+
+
+function buildTrafficSignals() {
+  trafficSignals=[];
+  const centers=[-60,0,60];
+  let index=0;
+  for(const x of centers)for(const z of centers){
+    const group=new THREE.Group();group.position.set(x,0,z);
+    const pole=makeBox(.18,4.2,.18,0x202631,7.1,2.1,7.1);group.add(pole);
+    const horizontal=makeBox(.68,.28,.18,0x26313f,7.1,4.08,6.95);
+    const vertical=makeBox(.18,.28,.68,0x26313f,6.95,4.08,7.1);
+    const hLight=new THREE.Mesh(new THREE.SphereGeometry(.1,8,6),new THREE.MeshBasicMaterial({color:0xff374f}));hLight.position.set(7.1,4.08,6.83);
+    const vLight=hLight.clone();vLight.material=hLight.material.clone();vLight.position.set(6.83,4.08,7.1);
+    group.add(horizontal,vertical,hLight,vLight);scene.add(group);
+    trafficSignals.push({x,z,index:index++,hLight,vLight});
+  }
+}
+
+function buildSearchMarker(){
+  const group=new THREE.Group();
+  const ring=new THREE.Mesh(new THREE.RingGeometry(8.5,9.2,48),new THREE.MeshBasicMaterial({color:0x3a8cff,transparent:true,opacity:.24,side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.06;group.add(ring);scene.add(group);return group;
+}
+
+function updateTrafficSignals(){
+  trafficSignals.forEach(signal=>{
+    const current=trafficLightState(worldTime,signal.index);
+    const horizontalOpen=current.axis==='horizontal';
+    const verticalOpen=current.axis==='vertical';
+    signal.hLight.material.color.setHex(horizontalOpen?0x35f29b:current.axis==='all'?0xffc23d:0xff374f);
+    signal.vLight.material.color.setHex(verticalOpen?0x35f29b:current.axis==='all'?0xffc23d:0xff374f);
+  });
+}
+
+function trafficVehicleActive(vehicle){
+  const hour=state.timeOfDay;
+  const density=hour>=7&&hour<=22?(state.weather==='RAIN'?.72:1):.52;
+  const normalized=((vehicle.trafficIndex??0)+1)/Math.max(1,traffic.length);
+  return normalized<=density+.12;
+}
+
+function trafficVehicleAhead(vehicle){
+  const forward=new THREE.Vector3(-Math.sin(vehicle.rotation),0,-Math.cos(vehicle.rotation));
+  for(const other of traffic){
+    if(other===vehicle||!other.mesh.visible||other.destroyed)continue;
+    const offset=tmpV.copy(other.mesh.position).sub(vehicle.mesh.position);
+    const distance=offset.length();
+    if(distance<7&&offset.normalize().dot(forward)>.72)return true;
+  }
+  return false;
+}
+
+function trafficShouldStop(vehicle,target){
+  const dx=target.x-vehicle.mesh.position.x,dz=target.z-vehicle.mesh.position.z;
+  const axis=Math.abs(dx)>Math.abs(dz)?'horizontal':'vertical';
+  for(const signal of trafficSignals){
+    if(Math.abs(vehicle.mesh.position.x-signal.x)>10||Math.abs(vehicle.mesh.position.z-signal.z)>10)continue;
+    const stateNow=trafficLightState(worldTime,signal.index);
+    if(stateNow.axis==='all'||stateNow.axis!==axis)return true;
+  }
+  return false;
+}
+
+function buildBuildings() {
+  const blocks = [-90, -30, 30, 90];
+  const palette = [0x3a4059, 0x5d3b56, 0x365464, 0x514c68, 0x6b4d3a, 0x2f4658];
+  let buildingIndex = 0;
+  for (const bx of blocks) for (const bz of blocks) {
+    if (bx > 88 || (bx === 90 && bz === -30)) continue;
+    const count = 2 + Math.floor(rand(0, 3));
+    for (let i = 0; i < count; i++) {
+      const w = rand(12, 22), d = rand(12, 22), h = rand(12, 54);
+      const x = bx + rand(-13, 13), z = bz + rand(-13, 13);
+      if (buildingIndex++ < 2) continue;
+      const building = makeBox(w, h, d, palette[Math.floor(rand(0, palette.length))], x, h / 2, z);
+      building.material.roughness = .82;
+      scene.add(building);
+      addCollider
