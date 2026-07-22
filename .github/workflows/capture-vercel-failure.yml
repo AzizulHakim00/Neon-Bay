@@ -1,0 +1,44 @@
+name: Capture Vercel deployment failure
+
+on:
+  status:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  capture:
+    if: github.event.context == 'Vercel' && github.event.state == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Record Vercel failure details
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.event.sha }}
+          STATUS_STATE: ${{ github.event.state }}
+          STATUS_CONTEXT: ${{ github.event.context }}
+          STATUS_DESCRIPTION: ${{ github.event.description }}
+          STATUS_TARGET: ${{ github.event.target_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="Vercel deployment diagnostics"
+          body=$(cat <<EOF
+          ## Latest Vercel failure
+
+          - Commit: \`${COMMIT_SHA}\`
+          - State: \`${STATUS_STATE}\`
+          - Context: \`${STATUS_CONTEXT}\`
+          - Description: ${STATUS_DESCRIPTION:-No description supplied}
+          - Target: ${STATUS_TARGET:-No target supplied}
+          - Captured: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          EOF
+          )
+          number=$(gh issue list --repo "$REPOSITORY" --state open --search "$title in:title" --json number,title --jq ".[] | select(.title == \"$title\") | .number" | head -n1)
+          if [[ -n "$number" ]]; then
+            gh issue comment "$number" --repo "$REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$REPOSITORY" --title "$title" --body "$body"
+          fi
