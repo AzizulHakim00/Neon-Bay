@@ -1,0 +1,157 @@
+ctor, interiorSystem, dialogue, demoDirector, missionContact;
+let cameraYaw = Math.PI * .25;
+let cameraPitch = -.22;
+let cameraDistance = 8.5;
+let notificationTimer = 0;
+let lastShotAt = 0;
+let wantedSpawnTimer = 0;
+let saveTimer = 0;
+let worldTime = 0;
+let collisionBoxes = [];
+let vehicles = [];
+let enemies = [];
+let pedestrians = [];
+let traffic = [];
+let policeCruisers = [];
+let interactables = [];
+let streetLights = [];
+let roadMaterials = [];
+let districtBannerTimer = 0;
+let currentDistrict = null;
+let coverPoints = [];
+let trafficSignals = [];
+let roadblocks = [];
+let activityMarker = null;
+let wantedSearchMarker = null;
+let lastGunshotPosition = null;
+let lastGunshotAt = -999;
+const mapCtx = dom.minimap.getContext('2d');
+const raycaster = new THREE.Raycaster();
+const tmpV = new THREE.Vector3();
+const tmpV2 = new THREE.Vector3();
+const tmpBox = new THREE.Box3();
+let progression = new ProgressionSystem();
+let businessEmpire = new BusinessEmpire();
+const phoneMapCtx = dom.phoneMap?.getContext('2d');
+
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.musicNodes = [];
+    this.master = null;
+    this.sirenPhase = 0;
+  }
+  start() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return;
+    }
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = .16;
+      this.master.connect(this.ctx.destination);
+      this.startMusic();
+    } catch { /* Audio is optional. */ }
+  }
+  tone(freq, duration = .08, type = 'square', volume = .12, slide = 0) {
+    if (!this.ctx || !state.sfxEnabled) return;
+    const now = this.ctx.currentTime;
+    const oscillator = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(freq, now);
+    if (slide) oscillator.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), now + duration);
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+    oscillator.connect(gain).connect(this.master);
+    oscillator.start(now);
+    oscillator.stop(now + duration + .02);
+  }
+  noise(duration = .08, volume = .12) {
+    if (!this.ctx || !state.sfxEnabled) return;
+    const length = Math.max(1, Math.floor(this.ctx.sampleRate * duration));
+    const buffer = this.ctx.createBuffer(1, length, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    const source = this.ctx.createBufferSource();
+    const gain = this.ctx.createGain();
+    gain.gain.value = volume;
+    source.buffer = buffer;
+    source.connect(gain).connect(this.master);
+    source.start();
+  }
+  shot() { this.noise(.09, .23); this.tone(95, .1, 'sawtooth', .1, -40); }
+  hit() { this.tone(160, .06, 'square', .12, -60); }
+  pickup() { this.tone(420, .08, 'sine', .11, 220); setTimeout(() => this.tone(680, .1, 'sine', .09), 70); }
+  cash() { [420, 620, 840].forEach((f, i) => setTimeout(() => this.tone(f, .11, 'triangle', .08), i * 65)); }
+  mission() { [330, 440, 660, 880].forEach((f, i) => setTimeout(() => this.tone(f, .16, 'triangle', .1), i * 100)); }
+  car() { this.tone(75, .13, 'sawtooth', .11, 40); }
+  startMusic() {
+    if (!this.ctx || this.musicNodes.length) return;
+    const station = RADIO_STATIONS[state.radioStation] || RADIO_STATIONS[0];
+    station.frequencies.forEach((freq, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+      osc.type = station.waveforms[i] || 'triangle';
+      osc.frequency.value = freq;
+      filter.type = 'lowpass';
+      filter.frequency.value = i < 2 ? 420 : 760;
+      gain.gain.value = i === 0 ? .018 : .006;
+      osc.connect(filter).connect(gain).connect(this.master);
+      osc.start();
+      this.musicNodes.push({ osc, gain, filter });
+    });
+    this.setMusic(state.musicEnabled);
+  }
+  setMusic(enabled) {
+    state.musicEnabled = enabled;
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    this.musicNodes.forEach((node, i) => node.gain.gain.linearRampToValueAtTime(enabled ? (i === 0 ? .018 : .006) : 0, now + .25));
+  }
+  setRadio(index, announce = true) {
+    state.radioStation = ((index % RADIO_STATIONS.length) + RADIO_STATIONS.length) % RADIO_STATIONS.length;
+    const station = RADIO_STATIONS[state.radioStation];
+    if (this.ctx && this.musicNodes.length) {
+      const now = this.ctx.currentTime;
+      this.musicNodes.forEach((node, i) => {
+        node.osc.type = station.waveforms[i] || 'triangle';
+        node.osc.frequency.exponentialRampToValueAtTime(station.frequencies[i] || station.frequencies[0], now + .35);
+      });
+    }
+    if (dom.radioStation) dom.radioStation.textContent = station.name;
+    if (announce) notify(`${station.name} — ${station.tagline}`, 2.4);
+  }
+}
+const audio = new AudioEngine();
+
+function seededRandom(seed) {
+  let value = seed % 2147483647;
+  if (value <= 0) value += 2147483646;
+  return () => (value = value * 16807 % 2147483647) / 2147483647;
+}
+const random = seededRandom(96421);
+const rand = (min, max) => min + (max - min) * random();
+
+function material(color, roughness = .75, metalness = .05) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
+}
+
+function makeBox(w, h, d, color, x = 0, y = h / 2, z = 0) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material(color));
+  mesh.position.set(x, y, z);
+  mesh.castShadow = state.quality === 'high';
+  mesh.receiveShadow = true;
+  return mesh;
+}
+
+
+function buildSkyDome() {
+  const geometry = new THREE.SphereGeometry(520, 32, 18);
+  const uniforms = {
+    topColor: { value: new THREE.Color(0x071025) },
+    horizonColor: { value: new THREE.Color(0xa33b7d) },
+    lowerColor: { value: new THREE.Color(0x170c27) },
+    starStrength: { value: .7 }
