@@ -1,0 +1,80 @@
+null;dom.interiorLabel?.classList.add('hidden');}
+  if(state.activeActivity)cancelSideActivity('Side activity cancelled for story mission.');clearRoadblocks();
+  clearMissionEnemies();
+  state.currentMission = clamp(index,0,MISSIONS.length-1);
+  state.missionStep = 0;
+  state.missionTimer = 0;
+  state.missionKills = 0;
+  state.missionTargetKills = 0;
+  state.missionSpecial = {};
+  state.wanted = 0;
+  state.wantedHeat = 0;
+  if (state.activeVehicle) exitVehicle(true);
+  if (resetPosition) player.position.copy(MISSIONS[state.currentMission].start);
+  player.visible = true;
+  updateMissionObjective(true);
+  saveGame(true);
+}
+
+function updateMissionObjective(force = false) {
+  const m=state.currentMission,s=state.missionStep;
+  dom.missionNumber.textContent=`JOB ${String(m+1).padStart(2,'0')}`;
+  dom.missionTitle.textContent=MISSIONS[m].title;
+  let text='', pos=null, progress=0;
+  if (m===0) {
+    if(s===0){text='Meet your contact in the apartment courtyard.';pos=new THREE.Vector3(-118,0,-136);progress=.12;}
+    else if(s===1){text='Enter the pink Sunset sports car.';pos=getVehicle('sunset').mesh.position;progress=.38;}
+    else if(s===2){text='Drive the Sunset to the Coastline garage.';pos=new THREE.Vector3(108,0,-90);progress=.72;}
+  } else if(m===1) {
+    if(s===0){text='Go to the beach exchange point.';pos=new THREE.Vector3(132,0,-132);progress=.18;}
+    else if(s===1){text=`Survive the ambush. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(132,0,-132);progress=.45+Math.min(.35,state.missionKills*.11);}
+    else if(s===2){text='Lose the police and reach the marina pier.';pos=new THREE.Vector3(193,0,125);progress=.88;}
+  } else if(m===2) {
+    if(s===0){text='Collect the package at the harbor warehouse.';pos=new THREE.Vector3(112,0,96);progress=.18;}
+    else if(s===1){text='Get into a vehicle before the patrol arrives.';pos=nearestVehiclePosition();progress=.36;}
+    else if(s===2){text=`Deliver to the safehouse. ${Math.max(0,Math.ceil(state.missionTimer))} seconds remaining.`;pos=new THREE.Vector3(-141,0,112);progress=.58+Math.min(.38,(90-state.missionTimer)/90*.38);}
+  } else if(m===3) {
+    if(s===0){text='Enter the warehouse yard.';pos=new THREE.Vector3(96,0,114);progress=.15;}
+    else if(s===1){text=`Clear the warehouse. Enemies remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(96,0,114);progress=.33+Math.min(.38,state.missionKills*.06);}
+    else if(s===2){text='Recover the stolen ledger.';pos=new THREE.Vector3(112,0,104);progress=.78;}
+    else if(s===3){text='Take the ledger to the apartment safehouse.';pos=new THREE.Vector3(-141,0,112);progress=.9;}
+  } else if(m===4) {
+    if(s===0){text='Meet the district boss at the old hotel.';pos=new THREE.Vector3(0,0,120);progress=.15;}
+    else if(s===1){text=`Defeat the boss and guards. Hostiles remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(0,0,120);progress=.35+Math.min(.42,state.missionKills*.08);}
+    else if(s===2){text='Escape to the end of the pier.';pos=new THREE.Vector3(200,0,125);progress=.9;}
+  } else if(m===5) {
+    if(s===0){text='Get to Starfall Nightclub before the retaliation arrives.';pos=new THREE.Vector3(112,0,42);progress=.15;}
+    else if(s===1){text=`Defend the nightclub. Attackers remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(116,0,38);progress=.35+Math.min(.42,state.missionKills*.08);}
+    else if(s===2){text='Reach Vice Coast Customs and regroup.';pos=new THREE.Vector3(108,0,-90);progress=.9;}
+  } else if(m===6) {
+    if(s===0){text='Enter the police station lobby.';pos=new THREE.Vector3(94,0,85);progress=.16;}
+    else if(s===1){text='Steal the Coastline evidence file.';pos=new THREE.Vector3(598,0,-6);progress=.5;}
+    else if(s===2){text='Escape the search and deliver the file to the safehouse.';pos=new THREE.Vector3(-141,0,112);progress=.84;}
+  } else if(m===7) {
+    if(s===0){text='Collect the shipment behind Harbor Freight.';pos=new THREE.Vector3(-150,0,67);progress=.16;}
+    else if(s===1){text='Load the shipment into a vehicle.';pos=nearestVehiclePosition();progress=.36;}
+    else if(s===2){text=`Reach the marina buyer. ${Math.max(0,Math.ceil(state.missionTimer))} seconds remaining.`;pos=new THREE.Vector3(193,0,125);progress=.56+Math.min(.4,(100-state.missionTimer)/100*.4);}
+  } else if(m===8) {
+    if(s===0){text='Meet the informant behind the Mirage Hotel.';pos=new THREE.Vector3(91,0,-54);progress=.15;}
+    else if(s===1){text=`Survive the double cross. Traitors remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(91,0,-54);progress=.34+Math.min(.45,state.missionKills*.065);}
+    else if(s===2){text='Bring the evidence to Starfall Nightclub.';pos=new THREE.Vector3(112,0,42);progress=.9;}
+  } else if(m===9) {
+    if(s===0){text='Meet the city factions at the Downtown plaza.';pos=new THREE.Vector3(0,0,60);progress=.14;}
+    else if(s===1){text=`Take the Neon Crown. Rivals remaining: ${Math.max(0,state.missionTargetKills-state.missionKills)}`;pos=new THREE.Vector3(0,0,60);progress=.32+Math.min(.48,state.missionKills*.06);}
+    else if(s===2){text='Escape the lockdown and reach the Vice Coast pier.';pos=new THREE.Vector3(200,0,125);progress=.9;}
+  }
+  dom.missionObjective.textContent=text;
+  dom.objectiveProgress.style.width=`${progress*100}%`;
+  if(pos){ objectiveMarker.visible=true; objectiveMarker.position.copy(pos); }
+  else objectiveMarker.visible=false;
+  if(force) notify(text,3.2);
+}
+
+function updateMission(dt) {
+  if (!state.running || state.paused || state.gameOver || state.cinematic) return;
+  const m=state.currentMission,s=state.missionStep,p=getPlayerPosition();
+  objectiveMarker.rotation.y += dt*1.7;
+  objectiveMarker.children[2].position.y = 3.2 + Math.sin(worldTime*3)*.35;
+  if(m===0){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<3.5){
+      if(globalThis.
