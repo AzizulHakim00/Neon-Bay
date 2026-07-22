@@ -2,7 +2,7 @@ name: Retry Vercel after build rate limit
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 permissions:
