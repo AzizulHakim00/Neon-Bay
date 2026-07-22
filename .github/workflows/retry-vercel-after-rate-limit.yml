@@ -1,4 +1,4 @@
-name: Retry Vercel after build rate limit
+name: Retry Vercel until production succeeds
 
 on:
   schedule:
@@ -39,41 +39,22 @@ jobs:
           target="$(jq -r '.target_url // ""' <<<"$latest")"
           description="$(jq -r '.description // ""' <<<"$latest")"
 
-          consecutive_retries=0
-          while IFS= read -r subject; do
-            if [[ "$subject" == "chore: retry Vercel production deployment"* ]]; then
-              consecutive_retries=$((consecutive_retries + 1))
-            else
-              break
-            fi
-          done < <(git log -n 10 --pretty=%s)
-
           echo "Commit: ${sha}"
           echo "Vercel state: ${state}"
           echo "Vercel target: ${target}"
           echo "Vercel description: ${description}"
-          echo "Consecutive automatic retries: ${consecutive_retries}"
 
           retry=false
           case "$state" in
             success)
-              echo "Production deployment is successful. Automatic retries will stop."
+              echo "Production deployment succeeded. No new deployment commit will be created."
               ;;
             pending)
-              echo "A Vercel deployment is already running. No retry is needed."
+              echo "A Vercel deployment is already running. Waiting for the next scheduled check."
               ;;
             failure)
-              combined="${target} ${description}"
-              if grep -Eqi 'build-rate-limit|rate.?limit|upgradeToPro' <<<"$combined"; then
-                retry=true
-                echo "Vercel is blocked by its build-rate limit. A fresh Git deployment will be triggered."
-              elif (( consecutive_retries < 3 )); then
-                retry=true
-                echo "The clean production build passes locally. Retrying this remote failure safely."
-              else
-                echo "Three ordinary Vercel retries already failed. Stopping to avoid an endless deployment loop."
-                exit 1
-              fi
+              retry=true
+              echo "Vercel rejected or failed the latest deployment. Triggering a fresh production attempt."
               ;;
             missing)
               commit_time="$(git show -s --format=%ct HEAD)"
@@ -81,14 +62,14 @@ jobs:
               age="$((now - commit_time))"
               if (( age >= 1200 )); then
                 retry=true
-                echo "No Vercel status appeared after 20 minutes. Triggering one fresh deployment attempt."
+                echo "No Vercel status appeared after 20 minutes. Triggering a fresh production attempt."
               else
                 echo "The commit is recent; waiting for Vercel to attach its status."
               fi
               ;;
             *)
-              echo "Unknown Vercel state: ${state}"
-              exit 1
+              retry=true
+              echo "Unknown Vercel status. Triggering a fresh production attempt."
               ;;
           esac
 
