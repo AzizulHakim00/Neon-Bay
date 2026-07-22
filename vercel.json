@@ -4,25 +4,5 @@
   "installCommand": "",
   "buildCommand": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/prepare-vercel-static.mjs",
   "outputDirectory": "vercel-static",
-  "cleanUrls": false,
-  "headers": [
-    {
-      "source": "/src/(.*)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    }
-  ]
+  "public": true
 }
