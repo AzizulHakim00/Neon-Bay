@@ -1,13 +1,15 @@
 {
   "name": "neon-bay",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.6.0",
   "type": "module",
   "engines": {
     "node": "22.x"
   },
   "scripts": {
-    "build": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && vite build"
+    "build": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-overlay.mjs && vite build",
+    "verify:v16": "node --experimental-vm-modules scripts/verify-vercel-static-v16.mjs vercel-static",
+    "test:cinematic": "node scripts/cinematic-city-v16-test.mjs"
   },
   "dependencies": {
     "three": "^0.179.1"

@@ -1,0 +1,23 @@
+name: Verify Neon Bay v1.6 static release
+
+on:
+  pull_request:
+    paths:
+      - 'vercel-static/**'
+      - 'scripts/verify-vercel-static-v16.mjs'
+      - '.github/workflows/verify-v16-static.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify browser-ready release
+        run: node --experimental-vm-modules scripts/verify-vercel-static-v16.mjs vercel-static

@@ -6,16 +6,9 @@
     <meta name="theme-color" content="#080b19" />
     <meta name="description" content="Neon Bay — an original browser-based open-city action game." />
     <link rel="icon" href="./favicon.svg" />
-    <title>Neon Bay</title>
     <link rel="stylesheet" href="./src/styles.css" />
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js",
-          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/"
-        }
-      }
-    </script>
+    <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/"}}</script>
+    <title>Neon Bay</title>
   </head>
   <body>
     <div id="game-root">
@@ -23,7 +16,7 @@
 
       <div id="loading-screen" class="screen active">
         <div class="loading-card">
-          <div class="eyebrow">ORIGINAL WEB GAME · v1.5</div>
+          <div class="eyebrow">ORIGINAL WEB GAME · v1.6</div>
           <h1>NEON <span>BAY</span></h1>
           <p>Building the city…</p>
           <div class="loader"><i></i></div>
@@ -35,17 +28,17 @@
         <div class="menu-panel">
           <div class="eyebrow">WELCOME TO</div>
           <h1>NEON <span>BAY</span></h1>
-          <p class="tagline">A neon crime saga across ten jobs, living districts, businesses and midnight radio.</p>
+          <p class="tagline">A cinematic neon crime saga with living windows, storm-lit streets and ten connected jobs.</p>
           <div class="menu-actions">
             <button id="continue-btn" class="primary">Continue Chapter</button>
             <button id="new-game-btn">New Game</button>
             <button id="how-btn">How to Play</button>
             <button id="settings-btn">Settings</button>
-            <a class="menu-link" href="./trailer.html" target="_blank" rel="noopener">Watch v1.5 Trailer</a>
+            <a class="menu-link" href="./trailer.html" target="_blank" rel="noopener">Watch Cinematic Trailer</a>
           </div>
           <p class="legal">Original characters, city, missions, music and artwork. Inspired by 1980s coastal crime fiction—no copied GTA assets.</p>
         </div>
-        <div class="menu-city-label">GRAPHICS OVERHAUL · v1.5</div>
+        <div class="menu-city-label">CINEMATIC CITY · v1.6</div>
       </div>
 
       <div id="how-panel" class="modal hidden">
@@ -136,6 +129,7 @@
         <canvas id="minimap" width="220" height="220"></canvas>
         <div id="speedometer" class="speedometer hidden"><strong id="speed-text">0</strong><span>KM/H</span></div>
       </div>
+
 
       <div id="phone-panel" class="phone-panel hidden">
         <div class="phone-shell">
