@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#080b19" />
+    <meta name="description" content="Neon Bay — an original browser-based open-city action game." />
+    <link rel="icon" href="./favicon.svg" />
+    <title>Neon Bay</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js",
+          "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.179.1/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="game-root">
+      <canvas id="game-canvas" aria-label="Neon Bay game canvas"></canvas>
+
+      <div id="loading-screen" class="screen active">
+        <div class="loading-card">
+          <div class="eyebrow">ORIGINAL WEB GAME · v1.5</div>
+          <h1>NEON <span>BAY</span></h1>
+          <p>Building the city…</p>
+          <div class="loader"><i></i></div>
+        </div>
+      </div>
+
+      <div id="main-menu" class="screen">
+        <div class="menu-backdrop"></div>
+        <div class="menu-panel">
+          <div class="eyebrow">WELCOME TO</div>
+          <h1>NEON <span>BAY</span></h1>
+          <p class="tagline">A neon crime saga across ten jobs, living districts, businesses and midnight radio.</p>
+          <div class="menu-actions">
+            <button id="continue-btn" class="primary">Continue Chapter</button>
+            <button id="new-game-btn">New Game</button>
+            <button id="how-btn">How to Play</button>
+            <button id="settings-btn">Settings</button>
+            <a class="menu-link" href="./trailer.html" target="_blank" rel="noopener">Watch v1.5 Trailer</a>
+          </div>
+          <p class="legal">Original characters, city, missions, music and artwork. Inspired by 1980s coastal crime fiction—no copied GTA assets.</p>
+        </div>
+        <div class="menu-city-label">GRAPHICS OVERHAUL · v1.5</div>
+      </div>
+
+      <div id="how-panel" class="modal hidden">
+        <div class="modal-card">
+          <button class="close-modal" aria-label="Close">×</button>
+          <div class="eyebrow">FIELD MANUAL</div>
+          <h2>How to Play</h2>
+          <div class="control-grid">
+            <div><kbd>W A S D</kbd><span>Move / drive</span></div>
+            <div><kbd>Mouse</kbd><span>Look / aim</span></div>
+            <div><kbd>Shift</kbd><span>Sprint / boost</span></div>
+            <div><kbd>Space</kbd><span>Jump / handbrake</span></div>
+            <div><kbd>E</kbd><span>Interact / enter vehicle</span></div>
+            <div><kbd>Click</kbd><span>Fire weapon</span></div>
+            <div><kbd>R</kbd><span>Reload</span></div>
+            <div><kbd>1 / 2 / 3 / Q</kbd><span>Select / cycle weapon</span></div>
+            <div><kbd>X</kbd><span>Change radio station</span></div>
+            <div><kbd>P</kbd><span>Open phone and city map</span></div>
+            <div><kbd>Esc</kbd><span>Pause</span></div>
+          </div>
+          <p>Follow the colored mission marker. Green markers are side activities. Traffic obeys signals, civilians report crimes, and police can arrest you.</p>
+        </div>
+      </div>
+
+      <div id="settings-panel" class="modal hidden">
+        <div class="modal-card">
+          <button class="close-modal" aria-label="Close">×</button>
+          <div class="eyebrow">DISPLAY & AUDIO</div>
+          <h2>Settings</h2>
+          <label class="setting-row"><span>Graphics quality</span><select id="quality-select"><option value="ultra">Ultra</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select></label>
+          <label class="setting-row"><span>Music</span><input id="music-toggle" type="checkbox" checked /></label>
+          <label class="setting-row"><span>Sound effects</span><input id="sfx-toggle" type="checkbox" checked /></label>
+          <label class="setting-row"><span>Dialogue voice</span><input id="voice-toggle" type="checkbox" checked /></label>
+          <label class="setting-row"><span>Camera sensitivity</span><input id="sensitivity" type="range" min="0.4" max="2" step="0.1" value="1" /></label>
+        </div>
+      </div>
+
+      <div id="stats-panel" class="modal hidden">
+        <div class="modal-card stats-modal">
+          <button class="close-modal" aria-label="Close">×</button>
+          <div class="eyebrow">VICE COAST CAREER</div>
+          <h2>Statistics</h2>
+          <div id="stats-body"></div>
+        </div>
+      </div>
+
+      <div id="hud" class="hidden">
+        <div class="top-left hud-stack">
+          <div class="player-bars hud-card">
+            <div class="bar-row"><span>HEALTH</span><div class="bar"><i id="health-bar"></i></div><b id="health-text">100</b></div>
+            <div class="bar-row"><span>ARMOR</span><div class="bar armor"><i id="armor-bar"></i></div><b id="armor-text">25</b></div>
+            <div class="bar-row"><span>STAMINA</span><div class="bar stamina"><i id="stamina-bar"></i></div><b id="stamina-text">100</b></div>
+          </div>
+          <div id="weapon-card" class="weapon-card hud-card">
+            <span id="weapon-name">9MM PISTOL</span>
+            <strong><b id="ammo-current">12</b><small>/</small><b id="ammo-reserve">72</b></strong>
+          </div>
+        </div>
+
+        <div class="top-right hud-stack align-right">
+          <div class="cash-card hud-card">$<span id="cash-text">500</span></div>
+          <div class="world-card hud-card"><span id="clock-text">18:20</span><span id="weather-text">CLEAR</span></div>
+          <div class="rep-card hud-card"><span id="rep-tier">UNKNOWN</span><strong><b id="rep-text">0</b> REP</strong><div class="rep-progress"><i id="rep-progress"></i></div></div>
+          <div class="wanted-card"><div id="wanted" class="wanted" aria-label="Wanted level">☆ ☆ ☆</div><small id="wanted-status">CLEAR</small></div>
+        </div>
+
+        <div id="mission-card" class="mission-card hud-card">
+          <div class="mission-number" id="mission-number">JOB 01</div>
+          <h2 id="mission-title">First Ride</h2>
+          <p id="mission-objective">Go to the apartment courtyard.</p>
+          <div class="objective-progress"><i id="objective-progress"></i></div>
+        </div>
+
+        <div id="activity-card" class="activity-card hud-card hidden">
+          <div><span id="activity-title">COASTLINE TAXI</span><b id="activity-timer">90s</b></div>
+          <p id="activity-objective">Pick up the passenger.</p>
+          <div class="objective-progress"><i id="activity-progress"></i></div>
+        </div>
+        <div id="radio-card" class="radio-card hud-card"><small>RADIO</small><strong id="radio-station">FLASHWAVE 86</strong></div>
+        <div id="district-banner" class="district-banner hidden"><small>ENTERING</small><strong id="district-name">OCEAN DRIVE</strong></div>
+        <div id="vehicle-diagnostics" class="vehicle-diagnostics hud-card hidden">
+          <span>ENGINE <b id="engine-text">100</b>%</span><span>BODY <b id="body-text">100</b>%</span><span>TIRES <b id="tires-text">100</b>%</span>
+        </div>
+
+        <div id="interaction" class="interaction hidden"><kbd>E</kbd><span id="interaction-text">Interact</span></div>
+        <div id="notification" class="notification hidden"></div>
+        <div id="crosshair" class="crosshair hidden"><i></i><i></i></div>
+        <canvas id="minimap" width="220" height="220"></canvas>
+        <div id="speedometer" class="speedometer hidden"><strong id="speed-text">0</strong><span>KM/H</span></div>
+      </div>
+
+      <div id="phone-panel" class="phone-panel hidden">
+        <div class="phone-shell">
+          <div class="phone-top"><span>VICE OS</span><b id="phone-time">18:20</b></div>
+          <div class="phone-hero">
+            <small>CURRENT DISTRICT</small>
+            <h2 id="phone-district">OCEAN DRIVE</h2>
+          </div>
+          <canvas id="phone-map" width="380" height="260" aria-label="City map"></canvas>
+          <div class="phone-grid">
+            <article><small>EMPIRE</small><strong id="phone-businesses">0 / 3</strong><span>Businesses owned</span></article>
+            <article><small>INCOME</small><strong id="phone-income">$0</strong><span>Next payout cycle</span></article>
+            <article><small>REPUTATION</small><strong id="phone-reputation">0</strong><span id="phone-tier">UNKNOWN</span></article>
+            <article><small>STORY</small><strong id="phone-story">1 / 10</strong><span>Current job</span></article>
+          </div>
+          <div class="phone-actions"><button id="phone-close" class="primary">Return to City</button></div>
+          <p>Press <kbd>P</kbd> to close · <kbd>X</kbd> changes the procedural radio station.</p>
+        </div>
+      </div>
+
+      <div id="pause-menu" class="screen pause-screen">
+        <div class="pause-card">
+          <div class="eyebrow">GAME PAUSED</div>
+          <h2>Vice Coast</h2>
+          <button id="resume-btn" class="primary">Resume</button>
+          <button id="save-btn">Save Game</button>
+          <button id="stats-btn">Career Statistics</button>
+          <button id="restart-mission-btn">Restart Mission</button>
+          <button id="quit-btn">Main Menu</button>
+        </div>
+      </div>
+
+      <div id="mission-complete" class="screen result-screen">
+        <div class="result-card">
+          <div class="eyebrow">MISSION PASSED</div>
+          <h2 id="complete-title">First Ride</h2>
+          <p id="complete-summary">Clean delivery.</p>
+          <strong id="complete-reward">+$750</strong>
+          <button id="next-mission-btn" class="primary">Continue</button>
+        </div>
+      </div>
+
+      <div id="game-over" class="screen result-screen danger">
+        <div class="result-card">
+          <div class="eyebrow">WASTED</div>
+          <h2>The bay keeps moving.</h2>
+          <p>You lost some cash, but the mission can be retried.</p>
+          <button id="retry-btn" class="primary">Retry Mission</button>
+          <button id="gameover-menu-btn">Main Menu</button>
+        </div>
+      </div>
+
+      <div id="cinematic" class="cinematic hidden" aria-live="polite">
+        <div class="cinematic-bar top"></div>
+        <div class="cinematic-bar bottom"></div>
+        <div class="dialogue-box">
+          <strong id="dialogue-speaker"></strong>
+          <p id="dialogue-text"></p>
+        </div>
+        <button id="skip-cinematic-btn" type="button">Skip</button>
+      </div>
+
+      <div id="interior-label" class="interior-label hidden"></div>
+      <div id="demo-caption" class="demo-caption hidden"></div>
+
+      <div id="mobile-controls" class="hidden">
+        <div id="joystick" class="joystick"><i id="joystick-knob"></i></div>
+        <div class="mobile-buttons">
+          <button data-action="fire">FIRE</button>
+          <button data-action="jump">JUMP</button>
+          <button data-action="interact">USE</button>
+          <button data-action="weapon">SWAP</button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

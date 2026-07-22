@@ -1,0 +1,26 @@
+name: Verify Neon Bay Vercel static release
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'vercel-static/**'
+      - 'scripts/verify-vercel-static.mjs'
+      - 'vercel.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-static-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify browser-ready v1.5 release
+        run: node scripts/verify-vercel-static.mjs vercel-static

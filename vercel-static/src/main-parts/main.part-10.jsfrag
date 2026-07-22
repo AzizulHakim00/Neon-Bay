@@ -1,0 +1,112 @@
+(x, z, w, d);
+      addWindows(building, w, h, d, buildingIndex);
+      if (random() > .72) addRoofSign(x, z, h, w, buildingIndex);
+    }
+  }
+  const named = [
+    [-142,-142,24,16,18,0x344257], [-94,-140,18,18,22,0x4c3552], [95,-98,24,22,20,0x33414d],
+    [95,96,28,24,18,0x4d3540], [-120,105,18,20,16,0x314a52], [30,150,32,20,24,0x40364f]
+  ];
+  named.forEach(([x,z,w,d,h,c], i) => {
+    const b = makeBox(w,h,d,c,x,h/2,z); scene.add(b); addCollider(x,z,w,d); addWindows(b,w,h,d,100+i);
+  });
+}
+
+function buildOceanDrive() {
+  const block = new THREE.Group(); block.name = 'Ocean Drive Block';
+  const addBuilding = (name,x,z,w,d,h,color,neon) => {
+    const building=makeBox(w,h,d,color,x,h/2,z);building.name=name;scene.add(building);addCollider(x,z,w,d);
+    addWindows(building,w,h,d,250+Math.floor(x+z));
+    const sign=makeBox(Math.min(w*.72,11),1.45,.18,neon,x,h*.58,z-d/2-.12);sign.material.emissive=new THREE.Color(neon);sign.material.emissiveIntensity=1.7;scene.add(sign);
+    return building;
+  };
+  addBuilding('Mirage Hotel',91,-42,22,16,31,0x65415d,0xff4fb7);
+  addBuilding('Moonlight Diner',90,-18,18,13,8,0x335766,0x4feaff);
+  addBuilding('Pixel Palace Arcade',109,-19,14,13,11,0x3f315e,0xa56eff);
+  for(let x=72;x<=113;x+=7){
+    const awning=makeBox(5,.18,2.4,x%2?0xff4fa1:0x43dce8,x,3.1,-7.8);awning.rotation.x=-.08;scene.add(awning);
+    const planter=makeBox(2,.65,1.1,0x273f33,x,.33,-4.8);scene.add(planter);addPalm(x,-4.8);
+  }
+  for(const [x,z] of [[76,-52],[105,-52],[73,-9],[113,-8]]){
+    const bench=makeBox(2.4,.22,.62,0x76543d,x,.62,z);const leg1=makeBox(.15,.55,.5,0x222832,x-.8,.28,z),leg2=makeBox(.15,.55,.5,0x222832,x+.8,.28,z);scene.add(bench,leg1,leg2);coverPoints.push(new THREE.Vector3(x+1.5,0,z));
+  }
+  const arch1=makeBox(.35,5,.35,0x2de5ff,66,2.5,-30),arch2=makeBox(.35,5,.35,0xff3eb5,118,2.5,-30),beam=makeBox(52,.35,.35,0x783cff,92,5,-30);
+  [arch1,arch2,beam].forEach(o=>{o.material.emissive=o.material.color.clone();o.material.emissiveIntensity=1.4;scene.add(o);});
+}
+
+function addWindows(building, w, h, d, seed) {
+  const countY = Math.max(1, Math.floor(h / 5));
+  const countX = Math.max(2, Math.floor(w / 4));
+  const colors = [0xffd271, 0x6ee6ff, 0xff74ca];
+  for (let y = 0; y < countY; y++) for (let x = 0; x < countX; x++) {
+    if (((x + y + seed) % 3) === 0) continue;
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.6), new THREE.MeshBasicMaterial({ color: colors[(x+y+seed)%colors.length], transparent:true, opacity:.55 }));
+    win.position.set(-w/2 + 2.2 + x * ((w-4.4)/Math.max(1,countX-1)), -h/2 + 2.7 + y*4.3, -d/2 - .011);
+    building.add(win);
+  }
+}
+
+function addRoofSign(x,z,h,w,index) {
+  const group = new THREE.Group();
+  const panel = makeBox(Math.min(w*.75,13),2.3,.25, index%2 ? 0xff3eb5 : 0x38e8ff, 0, 0, 0);
+  panel.material.emissive = panel.material.color.clone(); panel.material.emissiveIntensity = 1.4;
+  group.add(panel); group.position.set(x,h+2,z); scene.add(group);
+}
+
+function buildDecorations() {
+  for (const c of CONFIG.roadCenters) {
+    for (let p = -165; p <= 165; p += 30) {
+      if (random() > .18) addStreetLight(p, c + 9);
+      if (random() > .18) addStreetLight(c - 9, p);
+    }
+  }
+  for (let z=-160; z<=160; z+=24) addPalm(143 + rand(-3,3), z + rand(-4,4));
+  for (let i=0; i<20; i++) addPalm(rand(128,150), rand(-170,170));
+  const pier = makeBox(48,.5,10,0x795b3f,180,.25,125); scene.add(pier);
+  for (let x=160; x<205; x+=8) {
+    const postA=makeBox(.45,3,.45,0x392f2b,x, -1.1,121); const postB=makeBox(.45,3,.45,0x392f2b,x,-1.1,129); scene.add(postA,postB);
+  }
+}
+
+function addStreetLight(x,z) {
+  const pole = makeBox(.16,5,.16,0x252936,x,2.5,z);
+  const lamp = makeBox(.75,.18,.3,0xe9f7ff,x,5.05,z);
+  lamp.material.emissive = new THREE.Color(0x99dfff); lamp.material.emissiveIntensity = 1.4;
+  scene.add(pole,lamp); streetLights.push(lamp);
+}
+
+function addPalm(x,z) {
+  const group = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(.22,.38,5.5,8), material(0x80583c)); trunk.position.y=2.75;
+  group.add(trunk);
+  for (let i=0;i<7;i++) {
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(.62,4.2,5), material(0x2c8b56));
+    leaf.position.y=5.5; leaf.rotation.z=Math.PI/2.6; leaf.rotation.y=i*(Math.PI*2/7); leaf.position.x=Math.sin(leaf.rotation.y)*1.1; leaf.position.z=Math.cos(leaf.rotation.y)*1.1;
+    group.add(leaf);
+  }
+  group.position.set(x,0,z); group.scale.setScalar(rand(.75,1.15)); scene.add(group);
+}
+
+function buildVehicles() {
+  new Vehicle('sunset', -108, -118, 0xf54291, Math.PI/2, 'sport');
+  new Vehicle('ocean', 68, -58, 0x36d5e8, 0, 'sport');
+  new Vehicle('van', -58, 68, 0xf0b64b, -Math.PI/2, 'van');
+  new Vehicle('taxi', -76, -12, 0xf3c445, Math.PI/2, 'ocean');
+  new Vehicle('parked-1', 35, -128, 0x7c6ee6, Math.PI/2, 'ocean');
+  new Vehicle('parked-2', 122, 36, 0x62b36d, 0, 'ocean');
+  new Vehicle('infernus', 118, 66, 0xff6d42, Math.PI/2, 'exotic');
+  new Vehicle('phoenix', -92, 126, 0x1f86d8, -Math.PI/2, 'muscle');
+  new Vehicle('stretch', 48, 72, 0xf2eff7, 0, 'limo');
+  new Vehicle('cobalt', -26, -128, 0x23d0ad, Math.PI/2, 'exotic');
+  const routes=buildRoadRoutes(CONFIG.roadCenters,150,3.2);
+  const colors=[0x7c6ee6,0x62b36d,0xd56a4f,0x4fa6d5,0xe6d36e,0xb25fcb,0x4cb79b,0xd07951,0x7084d8,0xc35471,0x34b7c5,0xee7d9f,0xece7df,0x2f6bad];
+  for(let i=0;i<14;i++){
+    const path=routes[i%routes.length];const startIndex=i%path.length;const start=path[startIndex];
+    const type=i%7===0?'van':i%6===0?'muscle':i%5===0?'exotic':'sport';
+    const v=new Vehicle(`traffic-${i}`,start.x+rand(-1.2,1.2),start.z+rand(-1.2,1.2),colors[i%colors.length],0,type);
+    v.ai=true;v.path=path;v.pathIndex=(startIndex+1)%path.length;v.trafficIndex=i;traffic.push(v);
+  }
+}
+
+function buildPopulation() {
+  const points=[[-140,-80],[-100,-60],[-70,20],[-20,-110],[25,-75],[70,-130],[110,-40],[120,40],[80,130],[20,90],[-60,120],[-130,70],[-15,15],[45,20],[132,-135],[82,-34],[102,-28],[-92,42],[-42,-72],[12,72],[64,18],[116

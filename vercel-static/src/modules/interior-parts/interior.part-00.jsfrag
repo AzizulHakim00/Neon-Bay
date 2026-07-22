@@ -1,0 +1,51 @@
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js';
+
+const DEFINITIONS = {
+  apartment: { label: 'Apartment 3B', center: [470,0], size: [22,18], color: 0x443653 },
+  gunshop: { label: 'Coastline Arms', center: [510,0], size: [24,18], color: 0x3c3444 },
+  garage: { label: 'Coastline Garage', center: [552,0], size: [28,20], color: 0x263c47 },
+  police: { label: 'Police Station Lobby', center: [598,0], size: [26,20], color: 0x25334b },
+  nightclub: { label: 'Starfall Nightclub', center: [642,0], size: [34,24], color: 0x34234f },
+};
+
+function mat(color, emissive = 0) {
+  return new THREE.MeshStandardMaterial({ color, roughness: .78, metalness: .05, emissive, emissiveIntensity: emissive ? .55 : 0 });
+}
+function box(w,h,d,color,x,y,z) {
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat(color));
+  mesh.position.set(x,y,z); mesh.castShadow = true; mesh.receiveShadow = true; return mesh;
+}
+
+export class InteriorSystem {
+  constructor(scene) {
+    this.scene = scene;
+    this.current = null;
+    this.returnPosition = null;
+    this.colliders = new Map();
+    this.entries = [];
+    this.build();
+  }
+
+  build() {
+    this.entries = [
+      { id:'apartment-door', type:'interior-door', interior:'apartment', label:'Enter apartment', position:new THREE.Vector3(-143,0,-132), radius:3.2, color:0xff76cb },
+      { id:'gunshop-door', type:'interior-door', interior:'gunshop', label:'Enter Coastline Arms', position:new THREE.Vector3(-12,0,-57), radius:3.2, color:0xff3eb5 },
+      { id:'garage-door', type:'interior-door', interior:'garage', label:'Enter garage workshop', position:new THREE.Vector3(108,0,-86), radius:3.5, color:0x38e8ff },
+      { id:'police-door', type:'interior-door', interior:'police', label:'Enter police station lobby', position:new THREE.Vector3(94,0,85), radius:3.4, color:0x4a8dff },
+      { id:'nightclub-door', type:'interior-door', interior:'nightclub', label:'Enter Starfall Nightclub', position:new THREE.Vector3(112,0,42), radius:3.6, color:0xff4fb7 },
+    ];
+    Object.entries(DEFINITIONS).forEach(([id, def]) => this.buildRoom(id, def));
+  }
+
+  buildRoom(id, def) {
+    const [cx,cz]=def.center,[w,d]=def.size;
+    const group=new THREE.Group(); group.name=`Interior:${id}`;
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(w,d),mat(def.color)); floor.rotation.x=-Math.PI/2; floor.receiveShadow=true; group.add(floor);
+    group.add(box(w,4,.35,0x171b29,0,2,-d/2),box(w,4,.35,0x171b29,0,2,d/2),box(.35,4,d,0x171b29,-w/2,2,0),box(.35,4,d,0x171b29,w/2,2,0));
+    const ceiling=new THREE.Mesh(new THREE.PlaneGeometry(w,d),mat(0x111521)); ceiling.rotation.x=Math.PI/2; ceiling.position.y=4; group.add(ceiling);
+    for(let x=-w/2+3;x<w/2-2;x+=5){const light=box(2.2,.08,.3,0xe6f8ff,x,3.86,0);light.material.emissive.setHex(0x9edfff);light.material.emissiveIntensity=1.7;group.add(light);}
+    const colliders=[];
+    const furniture=(fw,fh,fd,color,x,y,z)=>{const item=box(fw,fh,fd,color,x,y,z);group.add(item);colliders.push({minX:cx+x-fw/2-.2,maxX:cx+x+fw/2+.2,minZ:cz+z-fd/2-.2,maxZ:cz+z+fd/2+.2});return item;};
+    if(id==='apartment'){
+      furniture(5,.65,3,0x283147,-5,.33,3); furniture(2.5,1.1,1.1,0x3f2d4d,4,.55,3); furniture(4,.8,2.2,0x754f3a,3,.4,-3);
+      const screen=furniture(2.8,1.6,.18,

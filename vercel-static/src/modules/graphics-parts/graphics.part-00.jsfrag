@@ -1,0 +1,154 @@
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.179.1/build/three.module.js';
+
+export const GRAPHICS_QUALITY = Object.freeze({
+  low: Object.freeze({ particles: 0, puddles: 0, props: 18, lightPools: 0, headlights: false, effects: 18, pixelRatio: 1 }),
+  medium: Object.freeze({ particles: 180, puddles: 14, props: 34, lightPools: 18, headlights: true, effects: 28, pixelRatio: 1.35 }),
+  high: Object.freeze({ particles: 420, puddles: 28, props: 56, lightPools: 32, headlights: true, effects: 44, pixelRatio: 2 }),
+  ultra: Object.freeze({ particles: 720, puddles: 42, props: 82, lightPools: 48, headlights: true, effects: 64, pixelRatio: 2.25 }),
+});
+
+export function graphicsProfile(value) {
+  return GRAPHICS_QUALITY[value] || GRAPHICS_QUALITY.high;
+}
+
+export function atmosphericExposure(hour, weather = 'CLEAR') {
+  const daylight = THREE.MathUtils.clamp(Math.sin((hour / 24) * Math.PI * 2 - Math.PI / 2) * .8 + .28, .08, 1);
+  const sunset = hour > 17 && hour < 20 ? .16 : 0;
+  const weatherPenalty = weather === 'RAIN' ? .13 : weather === 'OVERCAST' ? .08 : 0;
+  return THREE.MathUtils.clamp(.92 + daylight * .24 + sunset - weatherPenalty, .78, 1.28);
+}
+
+export function atmosphericFog(hour, weather = 'CLEAR') {
+  const night = hour < 6 || hour > 20;
+  const weatherBoost = weather === 'RAIN' ? .0018 : weather === 'OVERCAST' ? .0009 : 0;
+  return (night ? .00425 : .00335) + weatherBoost;
+}
+
+const clamp = THREE.MathUtils.clamp;
+const lerp = THREE.MathUtils.lerp;
+
+function emissiveMaterial(color, intensity = 1, opacity = 1) {
+  const material = new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+  material.userData.baseOpacity = opacity;
+  material.userData.intensity = intensity;
+  return material;
+}
+
+function seededValue(index, salt = 0) {
+  const value = Math.sin(index * 127.1 + salt * 311.7) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+export class GraphicsOverhaul {
+  constructor({ scene, camera, renderer, quality = 'high', random = Math.random, testMode = false } = {}) {
+    this.scene = scene;
+    this.camera = camera;
+    this.renderer = renderer;
+    this.random = random;
+    this.testMode = testMode;
+    this.quality = testMode ? 'low' : quality;
+    this.profile = graphicsProfile(this.quality);
+    this.root = new THREE.Group();
+    this.root.name = 'Neon Bay v1.5 Graphics Overhaul';
+    this.scene.add(this.root);
+    this.puddles = [];
+    this.lightPools = [];
+    this.effects = [];
+    this.vehicles = new Set();
+    this.roadMaterials = new Set();
+    this.dust = null;
+    this.dustOrigin = new THREE.Vector3();
+    this.foamStrips = [];
+    this.shake = 0;
+    this.time = 0;
+    this.fillLight = new THREE.PointLight(0x5d9dff, 0, 34, 2);
+    this.fillLight.position.set(0, 6, 0);
+    this.root.add(this.fillLight);
+    this.rimLight = new THREE.PointLight(0xff4fb7, 0, 18, 2);
+    this.rimLight.position.set(0, 3, 0);
+    this.root.add(this.rimLight);
+    this.headlight = new THREE.SpotLight(0xd9f4ff, 0, 58, Math.PI / 7, .48, 1.5);
+    this.headlight.position.set(0, 1.2, -1.6);
+    this.headlight.target.position.set(0, .4, -18);
+    this.root.add(this.headlight, this.headlight.target);
+  }
+
+  build() {
+    this.buildPuddles();
+    this.buildAtmosphere();
+    this.buildBeachFoam();
+    this.buildStreetProps();
+    this.buildLightPools();
+    return this;
+  }
+
+  setQuality(value) {
+    this.quality = value in GRAPHICS_QUALITY ? value : 'high';
+    this.profile = graphicsProfile(this.quality);
+    const enabled = this.quality !== 'low';
+    if (this.dust) this.dust.visible = enabled;
+    this.puddles.forEach((puddle, index) => { puddle.visible = index < this.profile.puddles; });
+    this.lightPools.forEach((pool, index) => { pool.visible = index < this.profile.lightPools; });
+  }
+
+  registerRoadMaterial(material) {
+    if (!material) return;
+    this.roadMaterials.add(material);
+    material.envMapIntensity = 1.2;
+  }
+
+  registerVehicle(vehicle) {
+    if (!vehicle || this.vehicles.has(vehicle)) return;
+    this.vehicles.add(vehicle);
+    const paint = vehicle.body?.material;
+    if (paint) {
+      const upgraded = new THREE.MeshPhysicalMaterial({
+        color: paint.color?.clone?.() || new THREE.Color(0xffffff),
+        roughness: .24,
+        metalness: .48,
+        clearcoat: .9,
+        clearcoatRoughness: .14,
+        envMapIntensity: 1.45,
+      });
+      vehicle.body.material = upgraded;
+    }
+    const cabin = vehicle.mesh?.children?.find(child => child.name === 'Cabin');
+    if (cabin?.material) {
+      cabin.material = new THREE.MeshPhysicalMaterial({
+        color: cabin.material.color?.clone?.() || new THREE.Color(0x101522),
+        roughness: .12,
+        metalness: .28,
+        clearcoat: .65,
+        clearcoatRoughness: .1,
+        transparent: true,
+        opacity: .92,
+      });
+    }
+    vehicle.headlights?.forEach(light => {
+      if (!light.material) return;
+      light.material = light.material.clone();
+      light.material.emissiveIntensity = 2.1;
+    });
+  }
+
+  buildPuddles() {
+    const max = GRAPHICS_QUALITY.ultra.puddles;
+    const material = new THREE.MeshPhysicalMaterial({
+      color: 0x34506f,
+      roughness: .08,
+      metalness: .68,
+      clearcoat: 1,
+      clearcoatRoughness: .04,
+      transparent: true,
+      opacity: .07,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    for (let i = 0; i < max; i++) {
+      const horizontal = i % 2 === 0;
+      const road = [-120, -60, 0, 60, 120][i % 5];
+      const offset = -156 + seededValue(i, 1) * 312;
+      const width = 1.8 + seededValue(i, 2) * 4.8;
+      const depth = .65 + seededValue(i, 3) * 1.9;
+      const puddle = new THREE.Mesh(new THREE.CircleGeometry(1, 24), material.clone());
+      puddle.scale.set

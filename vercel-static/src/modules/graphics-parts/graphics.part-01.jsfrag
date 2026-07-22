@@ -1,0 +1,105 @@
+(width, depth, 1);
+      puddle.rotation.x = -Math.PI / 2;
+      puddle.rotation.z = seededValue(i, 4) * Math.PI;
+      puddle.position.set(horizontal ? offset : road + (seededValue(i, 5) - .5) * 8, .046, horizontal ? road + (seededValue(i, 6) - .5) * 8 : offset);
+      puddle.visible = i < this.profile.puddles;
+      this.root.add(puddle);
+      this.puddles.push(puddle);
+    }
+  }
+
+  buildAtmosphere() {
+    const count = GRAPHICS_QUALITY.ultra.particles;
+    if (!count) return;
+    const positions = new Float32Array(count * 3);
+    const phases = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (seededValue(i, 10) - .5) * 95;
+      positions[i * 3 + 1] = 1 + seededValue(i, 11) * 27;
+      positions[i * 3 + 2] = (seededValue(i, 12) - .5) * 95;
+      phases[i] = seededValue(i, 13) * Math.PI * 2;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+    const material = new THREE.PointsMaterial({ color: 0xffd7a8, size: .08, transparent: true, opacity: .28, depthWrite: false, blending: THREE.AdditiveBlending });
+    this.dust = new THREE.Points(geometry, material);
+    this.dust.frustumCulled = false;
+    this.dust.visible = this.profile.particles > 0;
+    this.root.add(this.dust);
+  }
+
+  buildBeachFoam() {
+    const material = new THREE.MeshBasicMaterial({ color: 0xbff7ff, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending });
+    for (let i = 0; i < 7; i++) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(2.4 + i * .18, 330, 1, 32), material.clone());
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(174 + i * 3.2, .055, 0);
+      strip.material.opacity = .19 - i * .016;
+      this.root.add(strip);
+      this.foamStrips.push(strip);
+    }
+  }
+
+  buildStreetProps() {
+    const count = GRAPHICS_QUALITY.ultra.props;
+    const roads = [-120, -60, 0, 60, 120];
+    for (let i = 0; i < count; i++) {
+      const group = new THREE.Group();
+      const road = roads[i % roads.length];
+      const horizontal = i % 2 === 0;
+      const along = -158 + seededValue(i, 20) * 316;
+      const side = seededValue(i, 21) > .5 ? 1 : -1;
+      group.position.set(horizontal ? along : road + side * 10.1, 0, horizontal ? road + side * 10.1 : along);
+      group.rotation.y = horizontal ? 0 : Math.PI / 2;
+      const type = i % 5;
+      if (type === 0) {
+        const bin = new THREE.Mesh(new THREE.CylinderGeometry(.42, .48, 1.05, 10), new THREE.MeshStandardMaterial({ color: 0x253b36, roughness: .8, metalness: .25 }));
+        bin.position.y = .53; group.add(bin);
+      } else if (type === 1) {
+        const hydrant = new THREE.Mesh(new THREE.CylinderGeometry(.2, .27, .72, 10), new THREE.MeshStandardMaterial({ color: 0xd84d49, roughness: .46, metalness: .35 }));
+        hydrant.position.y = .36; group.add(hydrant);
+        const cap = new THREE.Mesh(new THREE.SphereGeometry(.24, 10, 6), hydrant.material); cap.position.y = .77; group.add(cap);
+      } else if (type === 2) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(.28, .78, 12), new THREE.MeshStandardMaterial({ color: 0xff7d2c, roughness: .62 }));
+        cone.position.y = .39; group.add(cone);
+        const band = new THREE.Mesh(new THREE.TorusGeometry(.19, .035, 6, 16), emissiveMaterial(0xffffff, 1, .75)); band.rotation.x = Math.PI / 2; band.position.y = .42; group.add(band);
+      } else if (type === 3) {
+        const box = new THREE.Mesh(new THREE.BoxGeometry(.7, .72, .45), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x2e7ab8 : 0xc34465, roughness: .52, metalness: .3 }));
+        box.position.y = .36; group.add(box);
+      } else {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(.06, .08, 1.7, 8), new THREE.MeshStandardMaterial({ color: 0x343a49, metalness: .5, roughness: .45 }));
+        post.position.y = .85; group.add(post);
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(.78, .48, .08), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x28a6c7 : 0xd95099, emissive: i % 2 ? 0x073b48 : 0x4d0d31, emissiveIntensity: 1.15, roughness: .25 }));
+        sign.position.y = 1.55; group.add(sign);
+      }
+      group.visible = i < this.profile.props;
+      this.root.add(group);
+    }
+  }
+
+  buildLightPools() {
+    const max = GRAPHICS_QUALITY.ultra.lightPools;
+    const roads = [-120, -60, 0, 60, 120];
+    for (let i = 0; i < max; i++) {
+      const horizontal = i % 2 === 0;
+      const road = roads[i % roads.length];
+      const along = -150 + (i % 13) * 25;
+      const pool = new THREE.Mesh(new THREE.CircleGeometry(4.8, 24), emissiveMaterial(i % 3 === 0 ? 0xff4fb7 : 0x58cfff, 1, .075));
+      pool.rotation.x = -Math.PI / 2;
+      pool.position.set(horizontal ? along : road + 8.4, .05, horizontal ? road + 8.4 : along);
+      pool.visible = i < this.profile.lightPools;
+      this.root.add(pool);
+      this.lightPools.push(pool);
+    }
+  }
+
+  emitShot(origin, direction, weapon = 'pistol') {
+    if (!origin || !direction || this.profile.effects <= 0) return;
+    const range = weapon === 'shotgun' ? 28 : weapon === 'smg' ? 45 : 55;
+    const end = origin.clone().add(direction.clone().normalize().multiplyScalar(range));
+    const geometry = new THREE.BufferGeometry().setFromPoints([origin, end]);
+    const line = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: weapon === 'shotgun' ? 0xffc28e : 0xfff4c7, transparent: true, opacity: .8, blending: THREE.AdditiveBlending, depthWrite: false }));
+    this.root.add(line);
+    this.effects.push({ object: line, life: weapon === 'smg' ? .055 : .09, maxLife: weapon === 'smg' ? .055 : .09, kind: 'fade' });
+    const flash = new TH

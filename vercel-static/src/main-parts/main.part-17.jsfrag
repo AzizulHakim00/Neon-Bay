@@ -1,0 +1,63 @@
+layerActor?.playOneShot('Shoot',state.weapon==='shotgun'?.42:.28);
+  const targets=[];enemies.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  pedestrians.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  const damaged=new Map();
+  for(let pellet=0;pellet<weapon.pellets;pellet++){
+    const aim=new THREE.Vector2((random()-.5)*weapon.spread,(random()-.5)*weapon.spread);
+    raycaster.setFromCamera(aim,camera);const hit=raycaster.intersectObjects(targets,false)[0];
+    if(hit&&hit.distance<(state.weapon==='shotgun'?48:90)){const entity=hit.object.userData.entity;if(entity)damaged.set(entity,(damaged.get(entity)||0)+weapon.damage);}
+  }
+  damaged.forEach((damage,entity)=>{progression.record('hits');entity.takeDamage(entity.boss?damage*.72:damage);});
+  state.weaponData[state.weapon].ammo=state.ammo;
+  lastGunshotPosition=getPlayerPosition().clone();lastGunshotAt=worldTime;
+  raiseWanted('gunfire',state.wanted||1);
+}
+
+function reload() {
+  const weapon=WEAPONS[state.weapon];
+  if(state.reloading||state.activeVehicle||state.ammo>=weapon.mag||state.reserve<=0)return;
+  state.reloading=true;dom.weaponName.textContent='RELOADING…';audio.tone(220,.08,'square',.05);
+  setTimeout(()=>{const needed=weapon.mag-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;state.reloading=false;dom.weaponName.textContent=weapon.name;audio.tone(420,.08,'square',.05);},weapon.reload);
+}
+
+function damagePlayer(amount) {
+  if(!state.running||state.gameOver)return;
+  let remaining=amount;
+  if(state.armor>0){const absorbed=Math.min(state.armor,remaining*.7);state.armor-=absorbed;remaining-=absorbed;}
+  state.health=Math.max(0,state.health-remaining);
+  if(state.health<=0)failMission('You were taken down.');
+}
+
+function updateHUD() {
+  dom.healthBar.style.width=`${state.health}%`;dom.healthText.textContent=Math.ceil(state.health);
+  dom.armorBar.style.width=`${state.armor}%`;dom.armorText.textContent=Math.ceil(state.armor);
+  dom.staminaBar.style.width=`${state.stamina}%`;dom.staminaText.textContent=Math.ceil(state.stamina);
+  dom.cash.textContent=Math.floor(state.cash).toLocaleString();dom.ammo.textContent=state.ammo;dom.reserve.textContent=state.reserve;dom.weaponName.textContent=state.reloading?'RELOADING…':WEAPONS[state.weapon].name;
+  dom.wanted.textContent=Array.from({length:3},(_,i)=>i<state.wanted?'★':'☆').join(' ');
+  if(dom.wantedStatus)dom.wantedStatus.textContent=wantedProfile(state.wanted).label;
+  if(dom.repText)dom.repText.textContent=progression.reputation.toLocaleString();if(dom.repTier)dom.repTier.textContent=progression.tier().name;if(dom.repProgress)dom.repProgress.style.width=`${progression.progress()*100}%`;
+  if(dom.vehicleDiagnostics){const v=state.activeVehicle;dom.vehicleDiagnostics.classList.toggle('hidden',!v);if(v){dom.engineText.textContent=Math.ceil(v.engineHealth);dom.bodyText.textContent=Math.ceil(v.bodyHealth);dom.tiresText.textContent=Math.ceil(v.tireHealth);}}
+  const h=Math.floor(state.timeOfDay),m=Math.floor((state.timeOfDay-h)*60);dom.clock.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  dom.weather.textContent=state.weather;if(dom.radioStation)dom.radioStation.textContent=(RADIO_STATIONS[state.radioStation]||RADIO_STATIONS[0]).name;if(state.phoneOpen)updatePhone();
+}
+
+function drawMinimap() {
+  const ctx=mapCtx,w=dom.minimap.width,h=dom.minimap.height,scale=.55;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#08101d';ctx.fillRect(0,0,w,h);
+  if(state.currentInterior){ctx.strokeStyle='rgba(101,239,255,.75)';ctx.lineWidth=4;ctx.strokeRect(28,35,w-56,h-70);ctx.fillStyle='#bff8ff';ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(interiorSystem?.label()||'INTERIOR',w/2,24);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(w/2,h/2,5,0,Math.PI*2);ctx.fill();return;}
+  ctx.save();ctx.translate(w/2,h/2);
+  ctx.strokeStyle='rgba(190,205,225,.25)';ctx.lineWidth=CONFIG.roadWidth*scale;
+  CONFIG.roadCenters.forEach(c=>{ctx.beginPath();ctx.moveTo(-180*scale,c*scale);ctx.lineTo(180*scale,c*scale);ctx.stroke();ctx.beginPath();ctx.moveTo(c*scale,-180*scale);ctx.lineTo(c*scale,180*scale);ctx.stroke();});
+  ctx.fillStyle='rgba(46,189,208,.35)';ctx.fillRect(155*scale,-180*scale,120*scale,360*scale);
+  if(objectiveMarker?.visible){ctx.fillStyle='#ff3eb5';ctx.beginPath();ctx.arc(objectiveMarker.position.x*scale,objectiveMarker.position.z*scale,5,0,Math.PI*2);ctx.fill();}
+  if(activityMarker?.visible){ctx.fillStyle='#35f2ad';ctx.beginPath();ctx.arc(activityMarker.position.x*scale,activityMarker.position.z*scale,5,0,Math.PI*2);ctx.fill();}
+  if(state.wanted>0){ctx.strokeStyle='rgba(55,142,255,.55)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(state.wantedLastKnown.x*scale,state.wantedLastKnown.z*scale,9*scale,0,Math.PI*2);ctx.stroke();}
+  interactables.forEach(i=>{ctx.fillStyle=`#${i.color.toString(16).padStart(6,'0')}`;ctx.fillRect(i.position.x*scale-2,i.position.z*scale-2,4,4);});
+  vehicles.filter(v=>!v.destroyed).forEach(v=>{ctx.fillStyle=v.type==='police'?'#3287ff':'#e6eaf2';ctx.fillRect(v.mesh.position.x*scale-1.5,v.mesh.position.z*scale-1.5,3,3);});
+  enemies.filter(e=>e.alive).forEach(e=>{ctx.fillStyle=e.police?'#338cff':'#ff4f62';ctx.beginPath();ctx.arc(e.group.position.x*scale,e.group.position.z*scale,2,0,Math.PI*2);ctx.fill();});
+  const p=getPlayerPosition();const rot=state.activeVehicle?state.activeVehicle.rotation:player.rotation.y;
+  ctx.translate(p.x*scale,p.z*scale);ctx.rotate(-rot);ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,6);ctx.lineTo(0,3);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
+  const vignette=ctx.createRadialGradient(w/2,h/2,w*.25,w/2,h/2,w*.5);vignette.addColorStop(0,'rgba(0,0,0,0)');vignette.addColorStop(1,'rgba(0,0,0,.55)');ctx.fillStyle=vignette;ctx.fillRect(0,0,w,h);
+}
+
+function notify(message,duration

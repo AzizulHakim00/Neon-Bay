@@ -1,0 +1,96 @@
+sions completed</span><b>${stats.taxiFares}</b><span>Taxi fares</span><b>${stats.racesWon}</b><span>Races won</span><b>${stats.policeEscapes}</b><span>Police escapes</span><b>${Math.round(stats.distanceDriven/1000)} km</b><span>Distance driven</span><b>${stats.hits}/${stats.shotsFired}</b><span>Weapon hits / shots</span></div>`;
+  $('#stats-panel')?.classList.remove('hidden');
+}
+
+
+function updateDistrictDiscovery(dt) {
+  if (state.currentInterior) return;
+  const position = getPlayerPosition();
+  const district = districtAt(position.x, position.z);
+  if (!currentDistrict || district.id !== currentDistrict.id) {
+    currentDistrict = district; state.districtId = district.id;
+    if (dom.districtName) { dom.districtName.textContent = district.name; dom.districtName.style.color = district.color; }
+    if (dom.districtBanner) { dom.districtBanner.classList.remove('hidden'); districtBannerTimer = 2.8; }
+  }
+  if (districtBannerTimer > 0) {
+    districtBannerTimer -= dt;
+    if (districtBannerTimer <= 0) dom.districtBanner?.classList.add('hidden');
+  }
+}
+
+function updateBusinessEmpire(dt) {
+  if (!state.running || state.paused || state.gameOver) return;
+  for (const payout of businessEmpire.update(dt)) {
+    state.cash += payout.income;
+    progression.record('moneyEarned', payout.income);
+    audio.cash();
+    notify(`${payout.name} income +$${payout.income}`, 2.4);
+    saveGame(true);
+  }
+}
+
+function buyBusiness(id) {
+  const result = businessEmpire.purchase(id, state.cash);
+  if (!result.ok) { notify(result.reason, 2.2); return; }
+  state.cash -= result.cost;
+  progression.record('moneyEarned', 0);
+  awardReputation(result.business.reputation, `${result.business.name} ownership`);
+  state.territoryControl[state.districtId] = clamp((state.territoryControl[state.districtId] || 0) + 18, 0, 100);
+  audio.cash(); notify(`${result.business.name} purchased. Income is now active.`, 3); saveGame(true);
+}
+
+function buySMG() {
+  if (state.ownedWeapons.smg) { notify('VICE SMG already owned.', 1.8); return; }
+  const price = 1200;
+  if (state.cash < price) { notify(`VICE SMG costs $${price}.`, 2); return; }
+  state.cash -= price; state.ownedWeapons.smg = true; state.weaponData.smg = { ammo:30, reserve:120, mag:30 };
+  awardReputation(35, 'New weapon'); audio.cash(); notify('VICE SMG purchased with 120 rounds.', 2.6); switchWeapon('smg'); saveGame(true);
+}
+
+function drawPhoneMap() {
+  const ctx=phoneMapCtx;if(!ctx||!dom.phoneMap)return;
+  const w=dom.phoneMap.width,h=dom.phoneMap.height,sx=w/360,sz=h/360;
+  ctx.clearRect(0,0,w,h);ctx.fillStyle='#070b18';ctx.fillRect(0,0,w,h);
+  const districtRects=[['#ff4fb7',235,0,125,198],['#42e8ff',235,198,125,162],['#ffb84a',0,215,115,145],['#9a75ff',115,215,120,145],['#62f2a9',0,0,235,215]];
+  districtRects.forEach(([color,x,z,rw,rh])=>{ctx.globalAlpha=.11;ctx.fillStyle=color;ctx.fillRect(x/360*w,z/360*h,rw/360*w,rh/360*h);});ctx.globalAlpha=1;
+  ctx.strokeStyle='rgba(210,220,240,.22)';ctx.lineWidth=CONFIG.roadWidth*sx;
+  CONFIG.roadCenters.forEach(c=>{const px=(c+180)*sx,pz=(c+180)*sz;ctx.beginPath();ctx.moveTo(0,pz);ctx.lineTo(w,pz);ctx.stroke();ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();});
+  ctx.fillStyle='rgba(26,176,208,.3)';ctx.fillRect((155+180)*sx,0,w-(155+180)*sx,h);
+  interactables.filter(i=>['side-taxi','side-race','purchase-nightclub','purchase-taxi','purchase-garage','interior-door'].includes(i.type)).forEach(i=>{ctx.fillStyle=`#${i.color.toString(16).padStart(6,'0')}`;ctx.fillRect((i.position.x+180)*sx-3,(i.position.z+180)*sz-3,6,6);});
+  if(objectiveMarker?.visible){ctx.fillStyle='#ff3eb5';ctx.beginPath();ctx.arc((objectiveMarker.position.x+180)*sx,(objectiveMarker.position.z+180)*sz,6,0,Math.PI*2);ctx.fill();}
+  const p=getPlayerPosition();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc((p.x+180)*sx,(p.z+180)*sz,5,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#c5cee0';ctx.font='700 11px sans-serif';ctx.textAlign='left';DISTRICTS.slice(0,4).forEach((d,i)=>ctx.fillText(d.name,10,18+i*16));
+}
+
+function updatePhone() {
+  if(!dom.phonePanel)return;const district=currentDistrict||districtAt(getPlayerPosition().x,getPlayerPosition().z);const tier=progression.tier();
+  const h=Math.floor(state.timeOfDay),m=Math.floor((state.timeOfDay-h)*60);
+  dom.phoneTime.textContent=`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  dom.phoneDistrict.textContent=district.name;dom.phoneDistrict.style.color=district.color;
+  dom.phoneBusinesses.textContent=`${businessEmpire.ownedCount()} / ${Object.keys(BUSINESS_DEFINITIONS).length}`;
+  dom.phoneIncome.textContent=`$${businessEmpire.projectedIncome().toLocaleString()}`;
+  dom.phoneReputation.textContent=progression.reputation.toLocaleString();dom.phoneTier.textContent=tier.name;
+  dom.phoneStory.textContent=`${Math.min(state.currentMission+1,MISSIONS.length)} / ${MISSIONS.length}`;drawPhoneMap();
+}
+
+function togglePhone(force) {
+  const open=force??!state.phoneOpen;
+  if(open&&(!state.running||state.paused||state.cinematic))return;
+  state.phoneOpen=open;
+  if(open){state.running=false;document.exitPointerLock?.();dom.phonePanel?.classList.remove('hidden');dom.crosshair.classList.add('hidden');updatePhone();}
+  else{dom.phonePanel?.classList.add('hidden');if(!state.gameOver){state.running=true;if(!state.activeVehicle)dom.crosshair.classList.toggle('hidden',isTouch);if(!isTouch)dom.canvas.requestPointerLock?.();}}
+}
+
+function buildWorld() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x101a34);
+  scene.fog = new THREE.FogExp2(0x101a34, .0037);
+
+  camera = new THREE.PerspectiveCamera(64, innerWidth / innerHeight, .1, 650);
+  renderer = new THREE.WebGLRenderer({ canvas: dom.canvas, antialias: state.quality !== 'low', powerPreference: 'high-performance' });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  applyQuality(state.quality);
+
+  hemi = new THREE.HemisphereLight(0x83a9ff, 0x152

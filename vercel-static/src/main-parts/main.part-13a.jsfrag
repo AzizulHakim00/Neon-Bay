@@ -1,0 +1,40 @@
+__NEON_BAY_TEST__ || state.firstRideCinematicSeen) advanceMissionStep();
+      else startFirstRideCinematic();
+    }
+    else if(s===1 && state.activeVehicle?.id==='sunset') advanceMissionStep();
+    else if(s===2 && state.activeVehicle?.id==='sunset' && p.distanceTo(objectiveMarker.position)<5.5) completeMission();
+  } else if(m===1){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<4){
+      state.missionTargetKills=3; state.missionKills=0;
+      spawnEnemiesAround(new THREE.Vector3(130,0,-130),3,false); state.wanted=1; state.wantedHeat=30; advanceMissionStep();
+    } else if(s===1 && state.missionKills>=state.missionTargetKills){ state.wanted=Math.max(state.wanted,2); state.wantedHeat=35; advanceMissionStep(); }
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6 && state.wanted===0) completeMission();
+  } else if(m===2){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<4){ audio.pickup(); notify('Package secured. Police scanners are active.',3); advanceMissionStep(); }
+    else if(s===1 && state.activeVehicle){ state.wanted=2;state.wantedHeat=45;state.missionTimer=90;advanceMissionStep(); }
+    else if(s===2){
+      state.missionTimer-=dt;
+      if(Math.floor(state.missionTimer*2)%2===0) updateMissionObjective();
+      if(state.missionTimer<=0) failMission('The delivery window closed.');
+      else if(p.distanceTo(objectiveMarker.position)<6) completeMission();
+    }
+  } else if(m===3){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){state.missionTargetKills=6;state.missionKills=0;spawnEnemiesAround(new THREE.Vector3(96,0,104),6,false);advanceMissionStep();}
+    else if(s===1 && state.missionKills>=state.missionTargetKills) advanceMissionStep();
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<4){audio.pickup();notify('Ledger recovered.',2);advanceMissionStep();}
+    else if(s===3 && p.distanceTo(objectiveMarker.position)<5) completeMission();
+  } else if(m===4){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){
+      state.missionTargetKills=5;state.missionKills=0;
+      spawnEnemiesAround(new THREE.Vector3(0,0,120),4,false);
+      new CharacterAI(6,120,{boss:true,health:300,speed:6.5,missionTarget:true});
+      advanceMissionStep();
+    } else if(s===1 && state.missionKills>=state.missionTargetKills){state.wanted=3;state.wantedHeat=50;advanceMissionStep();}
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6) completeMission(true);
+  } else if(m===5){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){state.missionTargetKills=5;state.missionKills=0;spawnEnemiesAround(new THREE.Vector3(116,0,38),5,false);advanceMissionStep();}
+    else if(s===1 && state.missionKills>=state.missionTargetKills)advanceMissionStep();
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6)completeMission();
+  } else if(m===6){
+    if(s===0 && state.currentInterior==='police')advanceMissionStep();
+    else if(s===1 && state.currentInterior==='police' && p.distanceTo(objectiveMarker.positio
