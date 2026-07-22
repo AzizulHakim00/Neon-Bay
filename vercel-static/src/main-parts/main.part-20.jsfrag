@@ -1,0 +1,31 @@
+otification(dt);drawMinimap();
+  } else if(state.running&&!state.paused&&!state.gameOver){
+    dialogue?.update(dt);updatePlayer(dt);updateAI(dt);updateCamera(dt);updateMission(dt);updateSideActivity(dt);updateWanted(dt);updateWorld(dt);updateInteractions();updateNotification(dt);updateHUD();drawMinimap();
+    if(input.fire)shoot();saveTimer+=dt;if(saveTimer>30){saveTimer=0;saveGame(true);}
+  } else if(scene){dialogue?.update(dt);updateCamera(dt);updateWorld(dt*.18);updateNotification(dt);drawMinimap();}
+  if(composer)composer.render();else renderer.render(scene,camera);
+}
+
+function startDemoMode(){
+  startMission(0,true);state.running=true;state.paused=false;hideAllScreens();dom.hud.classList.add('hidden');dom.mobile.classList.add('hidden');dom.demoCaption.classList.remove('hidden');
+  demoDirector=new DemoDirector({caption:dom.demoCaption,onFinish:()=>{}});
+}
+
+async function init() {
+  try{
+    state.quality=localStorage.getItem('neon-bay-quality')||'high';state.voiceEnabled=localStorage.getItem('neon-bay-voice')!=='false';
+    await actorLibrary.preload();
+    buildWorld();
+    await initPostFX();
+    dialogue=new DialogueSystem({root:dom.cinematic,speaker:dom.dialogueSpeaker,text:dom.dialogueText,skipButton:dom.skipCinematic,voiceEnabled:()=>state.voiceEnabled});
+    bindEvents();clock=new THREE.Clock();
+    if(dom.quality) dom.quality.value=state.quality;if(dom.voice) dom.voice.checked=state.voiceEnabled;dom.continueBtn.disabled=!(localStorage.getItem(CONFIG.saveKey)||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey));
+    await new Promise(r=>setTimeout(r,450));dom.loading.classList.remove('active');
+    if(state.demoMode)startDemoMode();else dom.menu.classList.add('active');
+    animate();
+  }catch(error){
+    console.error(error);dom.loading.innerHTML=`<div class="loading-card"><div class="eyebrow">STARTUP ERROR</div><h2 style="font-size:48px;margin:20px 0">Neon Bay could not start</h2><p>${String(error.message||error)}</p><p>Try enabling hardware acceleration or using a current Chrome, Edge, or Firefox browser.</p></div>`;
+  }
+}
+
+init();
