@@ -1,0 +1,89 @@
+'){
+    if(state.health>=100)notify('You are already healthy.',2);
+    else if(state.cash>=250){state.cash-=250;state.health=100;audio.cash();notify('Health restored.',2);saveGame();}else notify('Not enough cash.',2);
+  } else if(candidate.type==='garage'){
+    const nearVehicle=state.activeVehicle||nearestVehicle(7);
+    if(!nearVehicle)notify('Bring a vehicle closer.',2);
+    else if(nearVehicle.health>=100&&nearVehicle.engineHealth>=100&&nearVehicle.tireHealth>=100)notify('Vehicle does not need repairs.',2);
+    else if(state.cash>=300){state.cash-=300;resetVehicleDamage(nearVehicle);progression.record('vehiclesRepaired');audio.cash();notify('Vehicle repaired and bodywork restored.',2);saveGame();}else notify('Not enough cash.',2);
+  } else if(candidate.type==='side-taxi') startSideActivity('taxi');
+  else if(candidate.type==='side-race') startSideActivity('race');
+  else if(candidate.type==='purchase-nightclub') buyBusiness('nightclub');
+  else if(candidate.type==='purchase-taxi') buyBusiness('taxi');
+  else if(candidate.type==='purchase-garage') buyBusiness('garage');
+  else if(candidate.type==='buy-smg') buySMG();
+  else if(candidate.type==='apartment-save') saveGame();
+  else if(candidate.type==='wardrobe') cycleOutfit();
+  else if(candidate.type==='stats') showStats();
+  else if(candidate.type==='upgrade-engine') buyVehicleUpgrade('engine');
+  else if(candidate.type==='upgrade-brakes') buyVehicleUpgrade('brakes');
+  else if(candidate.type==='upgrade-grip') buyVehicleUpgrade('grip');
+  else if(candidate.type==='interior-door') {
+    enterInterior(candidate.object.interior);
+  } else if(candidate.type==='interior-exit') {
+    exitInterior();
+  }
+}
+
+function enterInterior(id) {
+  if(state.activeVehicle){notify('Exit the vehicle first.',1.8);return;}
+  const destination=interiorSystem?.enter(id,player.position);if(!destination)return;
+  state.currentInterior=id;player.position.copy(destination);playerVelocity.set(0,0,0);objectiveMarker.visible=false;
+  dom.interiorLabel.textContent=interiorSystem.label();dom.interiorLabel.classList.remove('hidden');notify(`Entered ${interiorSystem.label()}.`,1.8);
+}
+
+function exitInterior() {
+  const destination=interiorSystem?.exit();if(!destination)return;
+  state.currentInterior=null;player.position.copy(destination);playerVelocity.set(0,0,0);dom.interiorLabel.classList.add('hidden');updateMissionObjective();notify('Returned to Coastline District.',1.8);
+}
+
+
+function enterVehicle(vehicle) {
+  if(vehicle.destroyed)return;
+  state.activeVehicle=vehicle;vehicle.occupied=true;player.visible=false;
+  vehicle.speed=0;audio.car();dom.crosshair.classList.add('hidden');dom.speedometer.classList.remove('hidden');notify(`Driving ${vehicleDisplayName(vehicle)}. Press E to exit.`,2.2);
+}
+
+function exitVehicle(force=false) {
+  const v=state.activeVehicle;if(!v)return;
+  const side=new THREE.Vector3(Math.cos(v.rotation)*2.1,0,-Math.sin(v.rotation)*2.1);
+  let target=v.mesh.position.clone().add(side);
+  if(collidesAt(target.x,target.z,.55))target=v.mesh.position.clone().sub(side);
+  player.position.set(target.x,0,target.z);player.visible=true;v.occupied=false;state.activeVehicle=null;
+  dom.speedometer.classList.add('hidden');if(state.pointerLocked)dom.crosshair.classList.remove('hidden');
+  if(!force)audio.car();
+}
+
+function destroyVehicle(v) {
+  if(v.destroyed)return;v.destroyed=true;v.speed=0;
+  v.mesh.traverse(o=>{if(o.isMesh&&o.material?.color)o.material.color.multiplyScalar(.18);});
+  notify('Vehicle destroyed!',2);
+  if(state.activeVehicle===v){exitVehicle(true);damagePlayer(45);}
+}
+
+function nearestVehicle(radius=999) {
+  const p=getPlayerPosition();let best=null,bestD=radius;
+  vehicles.filter(v=>!v.destroyed&&!v.ai).forEach(v=>{const d=p.distanceTo(v.mesh.position);if(d<bestD){best=v;bestD=d;}});return best;
+}
+function nearestVehiclePosition(){return nearestVehicle()?.mesh.position||new THREE.Vector3(-108,0,-118);}
+function getVehicle(id){return vehicles.find(v=>v.id===id);}
+function vehicleDisplayName(v){return v.id==='taxi'?'Coastline Taxi':v.id==='infernus'?'Inferno ZX':v.id==='phoenix'?'Phoenix Muscle':v.id==='stretch'?'Vice Stretch':v.id==='cobalt'?'Cobalt Turbo':v.type==='van'?'Harbor Van':v.type==='exotic'?'Coastal Exotic':v.type==='muscle'?'Street Muscle':v.type==='limo'?'Luxury Limousine':v.id==='sunset'?'Sunset GT':v.id==='ocean'?'Oceanic Coupe':v.id?.startsWith('parked')?'Street Coupe':'Vehicle';}
+function getPlayerPosition(){return state.activeVehicle?state.activeVehicle.mesh.position:player.position;}
+
+function switchWeapon(type) {
+  if(!WEAPONS[type]||state.reloading||state.activeVehicle)return;
+  if(!state.ownedWeapons[type]){notify(`${WEAPONS[type].name} is not owned. Visit Coastline Arms.`,1.8);return;}
+  state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;
+  state.weapon=type;state.ammo=state.weaponData[type].ammo;state.reserve=state.weaponData[type].reserve;
+  playerActor?.setWeapon(type);dom.weaponName.textContent=WEAPONS[type].name;audio.tone(type==='shotgun'?180:type==='smg'?250:320,.08,'square',.06,80);notify(`${WEAPONS[type].name} equipped.`,1.2);
+}
+
+function cycleWeapon(){const order=['pistol','smg','shotgun'].filter(type=>state.ownedWeapons[type]);const index=order.indexOf(state.weapon);switchWeapon(order[(index+1)%order.length]);}
+
+function shoot() {
+  if(!state.running||state.paused||state.activeVehicle||state.reloading||state.cinematic)return;
+  const weapon=WEAPONS[state.weapon];
+  const now=performance.now();if(now-lastShotAt<weapon.cooldown)return;lastShotAt=now;
+  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Weapon empty. Press R to reload.',1.5);return;}
+  state.ammo--;progression.record('shotsFired');audio.shot();raycaster.setFromCamera(new THREE.Vector2(0,0),camera);visualOverhaul?.emitShot(camera.position.clone(),raycaster.ray.direction.clone(),state.weapon);if(state.weapon==='shotgun'){audio.noise(.16,.3);cameraPitch=clamp(cameraPitch+.035,-.75,.32);}
+  p
