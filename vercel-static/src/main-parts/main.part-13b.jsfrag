@@ -1,0 +1,35 @@
+n)<4){audio.pickup();state.wanted=3;state.wantedHeat=58;notify('Evidence secured. The station is in lockdown.',2.5);advanceMissionStep();}
+    else if(s===2 && !state.currentInterior && p.distanceTo(objectiveMarker.position)<6 && state.wanted===0)completeMission();
+  } else if(m===7){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<4){audio.pickup();notify('Shipment loaded. Find a fast vehicle.',2.3);advanceMissionStep();}
+    else if(s===1 && state.activeVehicle){state.wanted=2;state.wantedHeat=48;state.missionTimer=100;advanceMissionStep();}
+    else if(s===2){state.missionTimer-=dt;if(Math.floor(state.missionTimer*2)%2===0)updateMissionObjective();if(state.missionTimer<=0)failMission('The harbor buyer left the city.');else if(p.distanceTo(objectiveMarker.position)<6)completeMission();}
+  } else if(m===8){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){state.missionTargetKills=7;state.missionKills=0;spawnEnemiesAround(new THREE.Vector3(91,0,-54),7,false);advanceMissionStep();}
+    else if(s===1 && state.missionKills>=state.missionTargetKills)advanceMissionStep();
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6)completeMission();
+  } else if(m===9){
+    if(s===0 && p.distanceTo(objectiveMarker.position)<5){state.missionTargetKills=8;state.missionKills=0;spawnEnemiesAround(new THREE.Vector3(0,0,60),7,false);new CharacterAI(7,60,{boss:true,health:420,speed:7,missionTarget:true});advanceMissionStep();}
+    else if(s===1 && state.missionKills>=state.missionTargetKills){state.wanted=3;state.wantedHeat=65;advanceMissionStep();}
+    else if(s===2 && p.distanceTo(objectiveMarker.position)<6)completeMission(true);
+  }
+}
+
+function startFirstRideCinematic() {
+  if(state.cinematic || state.firstRideCinematicSeen)return;
+  state.cinematic=true;state.cinematicTime=0;input.fire=false;input.aim=false;document.exitPointerLock?.();dom.crosshair.classList.add('hidden');
+  missionContact?.actor?.setAction('Talk');
+  dialogue?.play(FIRST_RIDE_DIALOGUE,()=>{
+    state.cinematic=false;state.firstRideCinematicSeen=true;missionContact?.actor?.setAction('Idle');
+    if(!isTouch&&!state.demoMode)dom.canvas.requestPointerLock?.();dom.crosshair.classList.toggle('hidden',isTouch);advanceMissionStep();
+  });
+}
+
+function updateCinematic(dt) {
+  state.cinematicTime+=dt;dialogue?.update(dt);missionContact?.actor?.update(dt,'Talk');playerActor?.update(dt,'Idle');
+  const t=state.cinematicTime;
+  const contact=missionContact?.group.position||new THREE.Vector3(-118,0,-136);
+  const car=getVehicle('sunset')?.mesh.position||new THREE.Vector3(-108,0,-118);
+  if(t<6){camera.position.lerp(contact.clone().add(new THREE.Vector3(5,2.6,6)),.06);camera.lookAt(contact.x,1.5,contact.z);}
+  else if(t<12){camera.position.lerp(player.position.clone().add(new THREE.Vector3(-4,2.3,5)),.07);camera.lookAt(player.position.x,1.45,player.position.z);}
+  else{const angle=(t-12)*.22;camera.position.set(car.x+Math.cos(angle)*7,car.y+3.1,car.z+Math.sin(angle)*7);camera.lookAt
