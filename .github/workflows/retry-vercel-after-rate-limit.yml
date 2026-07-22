@@ -1,4 +1,4 @@
-name: Retry Vercel until production succeeds
+name: Verify and retry Vercel until production succeeds
 
 on:
   schedule:
@@ -23,6 +23,14 @@ jobs:
           ref: main
           fetch-depth: 0
           persist-credentials: true
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the deployable v1.5 static release
+        run: node scripts/verify-vercel-static.mjs vercel-static
 
       - name: Inspect latest Vercel status
         id: vercel
@@ -54,7 +62,7 @@ jobs:
               ;;
             failure)
               retry=true
-              echo "Vercel rejected or failed the latest deployment. Triggering a fresh production attempt."
+              echo "Vercel rejected or failed the latest deployment. Triggering a fresh verified static deployment."
               ;;
             missing)
               commit_time="$(git show -s --format=%ct HEAD)"
@@ -62,14 +70,14 @@ jobs:
               age="$((now - commit_time))"
               if (( age >= 1200 )); then
                 retry=true
-                echo "No Vercel status appeared after 20 minutes. Triggering a fresh production attempt."
+                echo "No Vercel status appeared after 20 minutes. Triggering a fresh verified static deployment."
               else
                 echo "The commit is recent; waiting for Vercel to attach its status."
               fi
               ;;
             *)
               retry=true
-              echo "Unknown Vercel status. Triggering a fresh production attempt."
+              echo "Unknown Vercel status. Triggering a fresh verified static deployment."
               ;;
           esac
 
@@ -82,5 +90,5 @@ jobs:
           set -euo pipefail
           git config user.name "neon-bay-deploy-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "chore: retry Vercel production deployment"
+          git commit --allow-empty -m "chore: retry verified Neon Bay v1.5 Vercel deployment"
           git push origin HEAD:main
