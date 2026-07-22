@@ -1,0 +1,120 @@
+h.position.z = nextZ;progression.record('distanceDriven',Math.abs(this.speed)*dt);
+    } else {
+      const impact = Math.abs(this.speed) * p.mass;
+      if (impact > 8) { applyVehicleImpact(this,impact,'front'); visualOverhaul?.emitImpact(this.mesh.position.clone(), impact); damagePlayer(impact * .1); audio.hit(); }
+      this.speed *= -.18;
+      if (this.health <= 0) destroyVehicle(this);
+    }
+    const hitEntities = [...enemies, ...pedestrians].filter(e => e.alive && e.group.position.distanceTo(this.mesh.position) < 1.7);
+    hitEntities.forEach(entity => {
+      if (Math.abs(this.speed) > 8) {
+        entity.takeDamage(Math.abs(this.speed) * 4 * p.mass, true); this.speed *= .68;
+        raiseWanted(entity.police?'officer':'collision',entity.police?3:1);
+      }
+    });
+    dom.speedText.textContent = Math.round(Math.abs(this.speed) * 3.6);
+  }
+  updateAI(dt) {
+    if (this.type === 'police') {
+      const target = getPlayerPosition();
+      const toTarget = tmpV.copy(target).sub(this.mesh.position);
+      const desired = Math.atan2(-toTarget.x, -toTarget.z);
+      this.rotation = rotateToward(this.rotation, desired, 1.4 * dt);
+      this.speed = lerp(this.speed, this.maxSpeed * .72, dt * .75);
+      const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+      const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+      if (!collidesAt(nx, nz, 1.2)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+      else { this.rotation += Math.PI * (.55 + random() * .25); this.speed *= .35; }
+      if (toTarget.length() < 3.2) {
+        damagePlayer(10 * dt);
+        if (state.activeVehicle) state.activeVehicle.speed *= .97;
+      }
+      return;
+    }
+    if (!this.path?.length) return;
+    const target = this.path[this.pathIndex];
+    const toTarget = tmpV.copy(target).sub(this.mesh.position);
+    if (toTarget.length() < 3) this.pathIndex = (this.pathIndex + 1) % this.path.length;
+    const desired = Math.atan2(-toTarget.x, -toTarget.z);
+    this.rotation = rotateToward(this.rotation, desired, this.turnSpeed * .55 * dt);
+    const blockedBySignal = trafficShouldStop(this, target);
+    const blockedByVehicle = trafficVehicleAhead(this);
+    const densityActive = trafficVehicleActive(this);
+    this.mesh.visible = densityActive;
+    if (!densityActive) { this.speed = 0; return; }
+    const desiredSpeed = blockedBySignal || blockedByVehicle ? 0 : this.maxSpeed * .38;
+    this.braking = desiredSpeed < this.speed;
+    this.speed = lerp(this.speed, desiredSpeed, dt * (blockedBySignal ? 3.2 : 1.25));
+    const nx = this.mesh.position.x - Math.sin(this.rotation) * this.speed * dt;
+    const nz = this.mesh.position.z - Math.cos(this.rotation) * this.speed * dt;
+    if (!collidesAt(nx, nz, 1.1)) { this.mesh.position.x = nx; this.mesh.position.z = nz; }
+    else { this.pathIndex = (this.pathIndex + 1) % this.path.length; this.speed *= .2; }
+  }
+}
+
+class CharacterAI {
+  constructor(x, z, options = {}) {
+    this.police = !!options.police;
+    this.passive = !!options.passive;
+    this.boss = !!options.boss;
+    this.missionTarget = !!options.missionTarget;
+    this.alive = true;
+    this.health = options.health || (this.boss ? 250 : this.passive ? 25 : 70);
+    this.speed = options.speed || (this.boss ? 7 : this.passive ? 2.2 : 5.2);
+    this.shootCooldown = rand(.3, 1.2);
+    this.wanderAngle = rand(0, Math.PI * 2);
+    this.wanderTimer = rand(1, 4);
+    this.stationary = !!options.stationary;
+    this.role = options.role || (this.police ? 'police' : this.passive ? 'civilian' : 'gang');
+    this.routine = options.routine || (this.passive && !this.stationary ? makeSidewalkRoutine(x,z,rand(12,28)) : null);
+    this.routineIndex = 0;
+    this.routineWait = rand(0,2.5);
+    this.reportTimer = 0;
+    this.reportedCrime = false;
+    this.populationVisible = true;
+    this.scheduleSeed = rand(0,1);
+    this.aiState = this.passive ? 'routine' : 'patrol';
+    this.searchTimer = 0;
+    this.lastSeen = new THREE.Vector3(x, 0, z);
+    this.coverPoint = null;
+    this.fleeTimer = 0;
+    const civilianPalette = ACTOR_PALETTES.civilians[Math.floor(rand(0, ACTOR_PALETTES.civilians.length))];
+    const palette = this.police ? ACTOR_PALETTES.police : this.passive ? civilianPalette : this.boss ? ACTOR_PALETTES.boss : ACTOR_PALETTES.enemy;
+    this.actor = actorLibrary.create({ palette, scale: this.boss ? 1.16 : .93, entity: this });
+    this.group = this.actor.root;
+    this.actor.setEntity(this);
+    this.group.position.set(x, 0, z);
+    scene.add(this.group);
+    if (this.passive) pedestrians.push(this); else enemies.push(this);
+  }
+  update(dt) {
+    if (!this.alive) return;
+    if (this.passive) return this.updateWander(dt);
+    const target = getPlayerPosition();
+    const distance = this.group.position.distanceTo(target);
+    const canSee = !state.currentInterior && distance < (this.police ? 78 : 62);
+    if (this.police && canSee) state.wantedLastKnown.copy(target);
+    if (canSee) {
+      this.aiState = 'alert';
+      this.searchTimer = this.boss ? 9 : 6;
+      this.lastSeen.copy(target);
+    } else if (this.aiState !== 'patrol') {
+      this.searchTimer -= dt;
+      this.aiState = this.searchTimer > 0 ? 'search' : 'patrol';
+    }
+
+    if (this.aiState === 'patrol') {
+      this.actor.update(dt, 'Idle');
+      return;
+    }
+
+    const destination = this.aiState === 'search' ? this.lastSeen : target;
+    if (!this.coverPoint || this.group.position.distanceTo(this.coverPoint) < 1 || this.coverPoint.distanceTo(target) < 5) {
+      this.coverPoint = this.chooseCover(target);
+    }
+    const shouldCover = this.coverPoint && (this.health < (this.boss ? 150 : 48) || distance < 20);
+    const moveTarget = shouldCover ? this.coverPoint : destination;
+    const moveDistance = this.group.position.distanceTo(moveTarget);
+    if (moveDistance > (shouldCover ? 1.2 : this.boss ? 9 : 12)) {
+      this.moveToward(moveTarget, dt, shouldCover ? this.speed * .9 : this.speed);
+      
