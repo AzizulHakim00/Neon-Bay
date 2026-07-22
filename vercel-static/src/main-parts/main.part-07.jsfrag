@@ -1,0 +1,93 @@
+cks(dt){
+  roadblocks.forEach(block=>{
+    block.life-=dt;block.group.children.forEach((child,index)=>{if(child.material?.emissive)child.material.emissiveIntensity=1.2+Math.sin(worldTime*10+index)*.9;});
+    if(state.activeVehicle&&state.activeVehicle.mesh.position.distanceTo(block.group.position)<4&&Math.abs(state.activeVehicle.speed)>7){
+      applyVehicleImpact(state.activeVehicle,15,'tires');state.activeVehicle.speed*=.45;notify('Spike strip damaged the tires!',1.8);block.life=0;
+    }
+  });
+  roadblocks.filter(block=>block.life<=0).forEach(block=>scene.remove(block.group));
+  roadblocks=roadblocks.filter(block=>block.life>0);
+}
+
+function handleArrest(){
+  state.arrestProgress=0;state.wanted=0;state.wantedHeat=0;clearRoadblocks();
+  const fine=Math.min(900,Math.max(150,Math.round(state.cash*.15)));state.cash=Math.max(0,state.cash-fine);
+  if(state.activeVehicle)exitVehicle(true);
+  player.position.set(94,0,80);state.health=Math.max(55,state.health);notify(`Arrested. Police fine: $${fine}.`,3);saveGame(true);
+}
+
+function activityTarget(){
+  if(state.activeActivity==='taxi')return state.activityStage===0?SIDE_ACTIVITY_DEFINITIONS.taxi.pickup:SIDE_ACTIVITY_DEFINITIONS.taxi.dropoff;
+  if(state.activeActivity==='race')return SIDE_ACTIVITY_DEFINITIONS.race.checkpoints[state.activityCheckpoint];
+  return null;
+}
+
+function startSideActivity(type){
+  if(state.activeActivity){notify('Finish the current side activity first.',2);return;}
+  const def=SIDE_ACTIVITY_DEFINITIONS[type];if(!def)return;
+  if(type==='race'&&!state.activeVehicle){notify('Enter a vehicle before starting the race.',2);return;}
+  state.activeActivity=type;state.activityStage=0;state.activityCheckpoint=type==='race'?1:0;state.activityTimer=def.time;
+  const target=activityTarget();activityMarker.visible=true;activityMarker.position.copy(target);
+  dom.activityCard?.classList.remove('hidden');notify(`${def.name} started.`,2);updateActivityHUD();
+}
+
+function cancelSideActivity(message='Side activity cancelled.'){
+  state.activeActivity=null;state.activityStage=0;state.activityCheckpoint=0;state.activityTimer=0;if(activityMarker)activityMarker.visible=false;dom.activityCard?.classList.add('hidden');notify(message,2);
+}
+
+function finishSideActivity(){
+  const def=SIDE_ACTIVITY_DEFINITIONS[state.activeActivity];if(!def)return;
+  state.cash+=def.reward;progression.record('moneyEarned',def.reward);
+  if(state.activeActivity==='taxi')progression.record('taxiFares');else progression.record('racesWon');
+  awardReputation(def.reputation,def.name);audio.cash();notify(`${def.name} complete · +$${def.reward}`,3);
+  state.activeActivity=null;state.activityStage=0;state.activityCheckpoint=0;state.activityTimer=0;activityMarker.visible=false;dom.activityCard?.classList.add('hidden');saveGame(true);
+}
+
+function updateSideActivity(dt){
+  if(!state.activeActivity)return;
+  const def=SIDE_ACTIVITY_DEFINITIONS[state.activeActivity];state.activityTimer-=dt;
+  if(state.activityTimer<=0){cancelSideActivity('Activity failed: time expired.');return;}
+  const p=getPlayerPosition();
+  if(state.activeActivity==='taxi'){
+    if(state.activityStage===0&&p.distanceTo(def.pickup)<5){
+      if(!state.activeVehicle){notify('Bring a vehicle to the passenger.',1.8);return;}
+      state.activityStage=1;activityMarker.position.copy(def.dropoff);notify('Passenger aboard. Drive to Ocean Drive.',2);
+    }else if(state.activityStage===1&&state.activeVehicle&&p.distanceTo(def.dropoff)<6)finishSideActivity();
+  }else if(state.activeActivity==='race'){
+    const checkpoint=def.checkpoints[state.activityCheckpoint];
+    if(state.activeVehicle&&p.distanceTo(checkpoint)<6){
+      state.activityCheckpoint++;
+      if(state.activityCheckpoint>=def.checkpoints.length)finishSideActivity();
+      else{activityMarker.position.copy(def.checkpoints[state.activityCheckpoint]);audio.pickup();}
+    }
+  }
+  updateActivityHUD();
+}
+
+function updateActivityHUD(){
+  if(!state.activeActivity||!dom.activityCard)return;
+  const def=SIDE_ACTIVITY_DEFINITIONS[state.activeActivity];dom.activityTitle.textContent=def.name;dom.activityTimer.textContent=`${Math.max(0,Math.ceil(state.activityTimer))}s`;
+  if(state.activeActivity==='taxi'){
+    dom.activityObjective.textContent=state.activityStage===0?'Pick up the passenger.':'Deliver the passenger to Ocean Drive.';
+    dom.activityProgress.style.width=state.activityStage===0?'35%':'72%';
+  }else{
+    dom.activityObjective.textContent=`Checkpoint ${state.activityCheckpoint+1} of ${def.checkpoints.length}`;
+    dom.activityProgress.style.width=`${Math.min(100,(state.activityCheckpoint/def.checkpoints.length)*100)}%`;
+  }
+}
+
+function applyOutfit(index=state.outfitIndex){
+  state.outfitIndex=((index%4)+4)%4;const palettes=ACTOR_PALETTES.civilians;const palette=state.outfitIndex===0?ACTOR_PALETTES.player:palettes[state.outfitIndex-1];
+  player?.traverse(object=>{if(!object.isMesh||!object.material)return;const name=object.material.name;if(name==='Shirt')object.material.color.setHex(palette.shirt);if(name==='Pants')object.material.color.setHex(palette.pants);if(name==='Accent'){object.material.color.setHex(palette.accent);object.material.emissive?.setHex(palette.accent);}});
+}
+function cycleOutfit(){applyOutfit(state.outfitIndex+1);notify(`Outfit ${state.outfitIndex+1} selected.`,1.6);saveGame(true);}
+
+function buyVehicleUpgrade(type){
+  const level=state.vehicleUpgrades[type]||0;if(level>=3){notify('This upgrade is already maxed.',1.8);return;}
+  const price=450+level*350;if(state.cash<price){notify(`Upgrade costs $${price}.`,1.8);return;}
+  state.cash-=price;state.vehicleUpgrades[type]=level+1;audio.cash();notify(`${type.toUpperCase()} upgraded to level ${level+1}.`,2);saveGame(true);
+}
+
+function showStats(){
+  if(!dom.statsBody)return;const tier=progression.tier();const stats=progression.stats;
+  dom.statsBody.innerHTML=`<div class="stats-grid"><b>${tier.name}</b><span>${progression.reputation} reputation</span><b>${stats.missionsCompleted}</b><span>Mis
