@@ -1,0 +1,96 @@
+0);addNeonPanel('HARBOR 17',-145,9,69.8,12,0xffb84a,0);
+  const colors=[0xc94f57,0x3e78b2,0xe3a83b,0x4c9a79,0x764ca5];
+  for(let row=0;row<3;row++)for(let col=0;col<4;col++){const x=-164+col*8,z=126+row*6;const container=makeBox(7,2.8,5,colors[(row+col)%colors.length],x,1.4,z);container.material.metalness=.2;scene.add(container);addCollider(x,z,7,5,.05);}
+  const crane=new THREE.Group();const tower=makeBox(1.4,28,1.4,0xe0a33a,0,14,0);const arm=makeBox(28,1,1,0xe0a33a,11,27,0);const cable=makeBox(.12,13,.12,0x1a1b20,20,19.5,0);crane.add(tower,arm,cable);crane.position.set(-158,0,146);scene.add(crane);
+  for(let x=-164;x<=-105;x+=12){const flood=makeBox(.3,10,.3,0x292d35,x,5,58);const light=makeBox(1.4,.35,.4,0xffe1a0,x,10,58);light.material.emissive=new THREE.Color(0xffd37a);light.material.emissiveIntensity=2;scene.add(flood,light);streetLights.push(light);}
+}
+
+function buildDowntownSkyline() {
+  const towers=[[-48,142,18,58,0x34395a],[-18,145,20,72,0x2d405c],[20,145,24,64,0x4a3659],[52,142,18,52,0x314957]];
+  towers.forEach(([x,z,w,h,c],i)=>{const tower=makeBox(w,h,17,c,x,h/2,z);scene.add(tower);addCollider(x,z,w,17);addWindows(tower,w,h,17,610+i);const antenna=makeBox(.22,9,.22,i%2?0xff3eb5:0x38e8ff,x,h+4.5,z);antenna.material.emissive=antenna.material.color.clone();antenna.material.emissiveIntensity=2;scene.add(antenna);streetLights.push(antenna);});
+}
+
+function buildBoardwalk() {
+  const walk=makeBox(12,.24,315,0xb98b5f,146,.12,0);walk.material.roughness=.9;scene.add(walk);
+  for(let z=-150;z<=150;z+=18){const rail=makeBox(.18,1.05,10,0xece3d2,151.5,.55,z);scene.add(rail);if(z%36===0)addStreetLight(147,z);}
+}
+
+function addCollider(x, z, w, d, padding = .3) {
+  collisionBoxes.push({ minX: x - w / 2 - padding, maxX: x + w / 2 + padding, minZ: z - d / 2 - padding, maxZ: z + d / 2 + padding });
+  const edge = 1.15;
+  coverPoints.push(
+    new THREE.Vector3(x-w/2-edge,0,z-d/2-edge), new THREE.Vector3(x+w/2+edge,0,z-d/2-edge),
+    new THREE.Vector3(x-w/2-edge,0,z+d/2+edge), new THREE.Vector3(x+w/2+edge,0,z+d/2+edge)
+  );
+}
+
+function collidesAt(x, z, radius = .55) {
+  const interiorCollision = interiorSystem?.collidesAt(x, z, radius);
+  if (interiorCollision !== null && interiorCollision !== undefined) return interiorCollision;
+  const onPier = x >= 150 - radius && x <= 206 + radius && z >= 117 - radius && z <= 133 + radius;
+  if (x < -176 + radius || ((!onPier) && x > 155 - radius) || z < -176 + radius || z > 176 - radius) return true;
+  for (const box of collisionBoxes) {
+    if (x + radius > box.minX && x - radius < box.maxX && z + radius > box.minZ && z - radius < box.maxZ) return true;
+  }
+  return false;
+}
+
+function createPlayer() {
+  playerActor = actorLibrary.create({ palette: ACTOR_PALETTES.player, scale: 1 });
+  const group = playerActor.root;
+  group.position.set(-130, 0, -118);
+  group.traverse(o => { if (o.isMesh) { o.castShadow = state.quality === 'high' || state.quality === 'ultra'; o.receiveShadow = true; o.userData.player = true; } });
+  scene.add(group);
+  playerVelocity = new THREE.Vector3();
+  return group;
+}
+
+class Vehicle {
+  constructor(id, x, z, color = 0xe23d88, rotation = 0, type = 'sport') {
+    this.id = id;
+    this.mesh = new THREE.Group();
+    this.speed = 0;
+    this.rotation = rotation;
+    this.health = 100;
+    const profiles = {
+      sunset: { maxSpeed: 41, acceleration: 23, brake: 30, reverse: 13, turn: 2.15, grip: .86, mass: 1.0 },
+      ocean: { maxSpeed: 36, acceleration: 19, brake: 27, reverse: 12, turn: 1.92, grip: .94, mass: 1.18 },
+      van: { maxSpeed: 28, acceleration: 12.5, brake: 21, reverse: 10, turn: 1.38, grip: .97, mass: 1.75 },
+      police: { maxSpeed: 38, acceleration: 20, brake: 29, reverse: 12, turn: 1.85, grip: .92, mass: 1.3 },
+      exotic: { maxSpeed: 47, acceleration: 27, brake: 32, reverse: 14, turn: 2.3, grip: .88, mass: .94 },
+      muscle: { maxSpeed: 39, acceleration: 25, brake: 26, reverse: 13, turn: 1.78, grip: .78, mass: 1.28 },
+      limo: { maxSpeed: 31, acceleration: 14, brake: 23, reverse: 10, turn: 1.28, grip: .96, mass: 1.7 }
+    };
+    this.profile = profiles[type] || profiles[type === 'police' ? 'police' : id === 'sunset' ? 'sunset' : id === 'ocean' ? 'ocean' : type === 'van' ? 'van' : 'ocean'];
+    this.maxSpeed = this.profile.maxSpeed;
+    this.acceleration = this.profile.acceleration;
+    this.turnSpeed = this.profile.turn;
+    this.steerAngle = 0;
+    this.bodyRoll = 0;
+    this.braking = false;
+    this.type = type;
+    this.occupied = false;
+    this.destroyed = false;
+    this.ai = false;
+    this.path = null;
+    this.pathIndex = 0;
+    this.direction = 1;
+
+    const isVan = type === 'van';
+    const isLimo = type === 'limo';
+    const isExotic = type === 'exotic';
+    const isMuscle = type === 'muscle';
+    const isSunset = id === 'sunset';
+    const isOcean = id === 'ocean';
+    const bodyLength=isLimo?5.65:isVan?4.45:isMuscle?4.55:isExotic?4.28:isSunset?4.35:4.08;
+    const bodyWidth=isLimo?2.18:isVan?2.25:isExotic?2.16:2.08;
+    const bodyHeight=isVan?1.25:isExotic?.56:isMuscle?.78:.68;
+    const body = makeBox(bodyWidth, bodyHeight, bodyLength, color, 0, isVan ? .92 : isExotic?.56:.64, 0);
+    body.name = 'VehicleBody'; body.material.roughness = .38; body.material.metalness = .32; this.body = body;
+    const cabinColor = type === 'police' ? 0xddeaff : isOcean ? 0x163f52 : 0x161b30;
+    const cabin = makeBox(isVan ? 2.02 : isLimo?1.88:isSunset ? 1.68 : 1.8, isVan ? .9 : isExotic?.58:.7, isVan ? 2.7 : isLimo?3.25:1.88, cabinColor, 0, isVan ? 1.72 : isExotic?1.08:1.26, isVan ? .15 : isLimo?.2:-.08);
+    cabin.name = 'Cabin'; cabin.material.metalness = .18; cabin.material.roughness = .3;
+    const hood = makeBox(isVan ? 2.02 : 1.9, .18, isVan ? .72 : isLimo?1.35:1.25, color, 0, isVan ? 1.15 : isExotic?.78:.91, isVan ? -1.76 : -bodyLength*.35);
+    const bumperZ=bodyLength/2+.08;
+    const bumperA = makeBox(bodyWidth+.12, .19, .2, 0x11151e, 0, .4, -bumperZ);
+    const bumperB = makeBox(bodyWidth+.12, .19,
