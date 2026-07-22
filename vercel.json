@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "",
-  "buildCommand": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/prepare-vercel-static.mjs",
-  "outputDirectory": "vercel-static"
+  "buildCommand": null,
+  "outputDirectory": "vercel-static",
+  "ignoreCommand": "exit 0"
 }
