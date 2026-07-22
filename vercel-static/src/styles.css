@@ -156,7 +156,7 @@ kbd { border:1px solid rgba(255,255,255,.25); border-bottom-width:3px; border-ra
 
 /* v1.4 Vice Coast presentation */
 body::before{content:"";position:fixed;inset:0;z-index:12;pointer-events:none;background:radial-gradient(circle at 50% 42%,transparent 42%,rgba(0,0,8,.34) 100%);mix-blend-mode:multiply}
-body::after{content:"";position:fixed;inset:0;z-index:13;pointer-events:none;opacity:.16;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px)}
+body::after{content:"";position:fixed;inset:0;z-index:13;pointer-events:none;opacity:.16;background:repeating-linear-gradient(0deg,transparent 0 5px,rgba(255,255,255,.025) 5px 6px)}
 .menu-panel h1{font-style:italic;transform:skewX(-4deg);filter:drop-shadow(0 0 28px rgba(56,232,255,.2))}
 #main-menu{background:linear-gradient(90deg,rgba(3,5,13,.96),rgba(3,5,13,.5) 50%,rgba(32,5,44,.2)),radial-gradient(circle at 78% 25%,rgba(255,81,175,.18),transparent 38%)}
 .radio-card{position:absolute;right:22px;bottom:178px;min-width:180px;padding:9px 12px;text-align:right}.radio-card small{display:block;color:#8d9ab0;font:800 8px/1 Inter;letter-spacing:.18em}.radio-card strong{display:block;color:#ff77ca;font:800 16px/1.2 "Barlow Condensed";letter-spacing:.08em;margin-top:3px;text-shadow:0 0 14px rgba(255,62,181,.45)}
@@ -206,3 +206,6 @@ body::after{content:"";position:fixed;inset:0;z-index:13;pointer-events:none;opa
 @media (prefers-reduced-motion: reduce) {
   #game-root::after { animation: none; }
 }
+
+/* Neon Bay v1.6 cinematic presentation */
+.v16-mission-card{position:fixed;left:50%;top:17%;z-index:80;min-width:min(620px,82vw);transform:translate(-50%,-30px);opacity:0;pointer-events:none;text-align:center;padding:22px 34px 26px;background:linear-gradient(90deg,transparent,rgba(5,9,22,.86) 16%,rgba(5,9,22,.86) 84%,transparent);filter:drop-shadow(0 16px 40px rgba(0,0,0,.5));transition:none}.v16-mission-card.show{animation:v16-title 3.4s cubic-bezier(.2,.75,.2,1) both}.v16-kicker{font-size:12px;letter-spacing:.42em;color:#5cecff;font-weight:900;text-transform:uppercase}.v16-title{font-size:clamp(30px,5vw,64px);font-weight:1000;font-style:italic;letter-spacing:-.045em;text-transform:uppercase;margin-top:8px;text-shadow:0 0 24px rgba(255,69,173,.55)}.v16-line{height:2px;width:38%;margin:15px auto 0;background:linear-gradient(90deg,transparent,#ff4fb7,#4deaff,transparent);box-shadow:0 0 18px #ff4fb7}@keyframes v16-title{0%{opacity:0;transform:translate(-50%,-32px) scale(.96)}13%,68%{opacity:1;transform:translate(-50%,0) scale(1)}100%{opacity:0;transform:translate(-50%,18px) scale(1.02)}}
