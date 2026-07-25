@@ -4,24 +4,28 @@ on:
   push:
     branches:
       - agent/neon-bay-v1.6.1-hotfix
-    paths:
+    paths: &hotfix_paths
       - package.json
       - vite.config.mjs
       - scripts/package-v161-hotfix.mjs
       - scripts/test-v161-recovery.mjs
       - .github/workflows/release-v161-hotfix.yml
+  pull_request:
+    branches:
+      - main
+    paths: *hotfix_paths
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: neon-bay-v161-hotfix
+  group: neon-bay-v161-hotfix-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   build-and-publish:
-    if: ${{ !contains(github.event.head_commit.message || '', '[v1.6.1 generated]') }}
+    if: ${{ github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, '[v1.6.1 generated]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
