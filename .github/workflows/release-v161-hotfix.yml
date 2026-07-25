@@ -1,19 +1,15 @@
 name: Build Neon Bay v1.6.1 hotfix
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/neon-bay-v1.6.1-hotfix
-    paths: &hotfix_paths
+      - main
+    paths:
       - package.json
       - vite.config.mjs
       - scripts/package-v161-hotfix.mjs
       - scripts/test-v161-recovery.mjs
       - .github/workflows/release-v161-hotfix.yml
-  pull_request:
-    branches:
-      - main
-    paths: *hotfix_paths
   workflow_dispatch:
 
 permissions:
@@ -25,7 +21,6 @@ concurrency:
 
 jobs:
   build-and-publish:
-    if: ${{ github.actor != 'github-actions[bot]' || !contains(github.event.head_commit.message, '[v1.6.1 generated]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,7 +39,24 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Build bundled v1.6.1 runtime
-        run: npm run build:hotfix
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build:hotfix 2>&1 | tee /tmp/neon-bay-v161-build.log
+
+      - name: Preserve build diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p diagnostics
+          cp /tmp/neon-bay-v161-build.log diagnostics/v161-build.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add diagnostics/v161-build.log
+          if ! git diff --cached --quiet; then
+            git commit -m "Capture v1.6.1 hotfix build diagnostics [skip hotfix]"
+            git push origin HEAD:agent/neon-bay-v1.6.1-hotfix
+          fi
 
       - name: Test recovery controls
         run: node scripts/test-v161-recovery.mjs dist
@@ -115,7 +127,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A vercel-static package-lock.json release-v1.6.1
+          rm -f diagnostics/v161-build.log
+          git add -A vercel-static package-lock.json release-v1.6.1 diagnostics
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
             exit 0
