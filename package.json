@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "build": "node scripts/apply-v13-clean.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-overlay.mjs && vite build",
+    "build": "node scripts/apply-v13-clean.mjs && node scripts/refresh-v14-manifest.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-overlay.mjs && vite build",
     "build:hotfix": "npm run build && node scripts/package-v161-hotfix.mjs dist",
     "verify:v16": "node --experimental-vm-modules scripts/verify-vercel-static-v16.mjs vercel-static",
     "verify:v161": "node scripts/package-v161-hotfix.mjs --verify-only vercel-static",
