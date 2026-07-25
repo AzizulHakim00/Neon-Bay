@@ -1,0 +1,163 @@
+name: Build Neon Bay v1.6.1 hotfix
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - vite.config.mjs
+      - scripts/package-v161-hotfix.mjs
+      - scripts/test-v161-recovery.mjs
+      - scripts/apply-v16-flexible.mjs
+      - scripts/prepare-v161-packager.mjs
+      - scripts/strip-external-fonts.mjs
+      - scripts/refresh-v14-manifest.mjs
+      - overlay-v16/**
+      - .github/workflows/release-v161-hotfix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neon-bay-v161-hotfix-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out hotfix branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/neon-bay-v1.6.1-hotfix
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore persistent v1.6 overlay sources
+        shell: bash
+        run: |
+          mkdir -p overlay-v16/modules
+          if [[ ! -f overlay-v16/v16-engine-patch.js ]]; then
+            git show origin/main:vercel-static/src/v16-engine-patch.js > overlay-v16/v16-engine-patch.js
+          fi
+          if [[ ! -f overlay-v16/styles.css ]]; then
+            git show origin/main:vercel-static/src/styles.css > overlay-v16/styles.css
+          fi
+          if [[ ! -f overlay-v16/modules/cinematic-city-v16.js ]]; then
+            git show origin/main:vercel-static/src/modules/cinematic-city-v16.js > overlay-v16/modules/cinematic-city-v16.js
+          fi
+
+      - name: Install build dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build bundled v1.6.1 runtime
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build:hotfix 2>&1 | tee /tmp/neon-bay-v161-build.log
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v161-build-log
+          path: /tmp/neon-bay-v161-build.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Test recovery controls
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/test-v161-recovery.mjs dist 2>&1 | tee /tmp/neon-bay-v161-recovery-test.log
+
+      - name: Upload recovery-test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v161-recovery-test-log
+          path: /tmp/neon-bay-v161-recovery-test.log
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: Publish browser-ready static directory
+        run: |
+          rm -rf vercel-static
+          mkdir -p vercel-static
+          cp -a dist/. vercel-static/
+          node scripts/package-v161-hotfix.mjs --verify-only vercel-static
+
+      - name: Verify local HTTP responses
+        shell: bash
+        run: |
+          python3 -m http.server 4173 --directory vercel-static >/tmp/neon-bay-v161-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl -fsS http://127.0.0.1:4173/index.html >/dev/null; then break; fi
+            sleep 0.25
+          done
+          while IFS= read -r file; do
+            relative="${file#vercel-static/}"
+            curl -fsS "http://127.0.0.1:4173/${relative}" >/dev/null
+          done < <(find vercel-static -type f -print | sort)
+
+      - name: Create release ZIPs and SHA-256 manifest
+        shell: bash
+        run: |
+          rm -rf release-v1.6.1
+          mkdir -p release-v1.6.1
+          git add -A overlay-v16 vercel-static package-lock.json
+          python3 - <<'PY'
+          import pathlib
+          import subprocess
+          import zipfile
+
+          root = pathlib.Path.cwd()
+          release = root / 'release-v1.6.1'
+          tracked = [
+              pathlib.Path(item.decode())
+              for item in subprocess.check_output(['git', 'ls-files', '-z']).split(b'\0')
+              if item
+          ]
+          source_zip = release / 'Neon_Bay_v1.6.1_Complete_Source.zip'
+          with zipfile.ZipFile(source_zip, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for relative in tracked:
+                  if relative.parts and relative.parts[0] == 'release-v1.6.1':
+                      continue
+                  absolute = root / relative
+                  if absolute.is_file():
+                      archive.write(absolute, pathlib.Path('Neon_Bay_v1.6.1') / relative)
+
+          static_root = root / 'vercel-static'
+          static_zip = release / 'Neon_Bay_v1.6.1_Standalone_Static.zip'
+          with zipfile.ZipFile(static_zip, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+              for absolute in sorted(static_root.rglob('*')):
+                  if absolute.is_file():
+                      archive.write(absolute, pathlib.Path('Neon_Bay_v1.6.1_Standalone_Static') / absolute.relative_to(static_root))
+          PY
+          (
+            cd release-v1.6.1
+            sha256sum Neon_Bay_v1.6.1_Complete_Source.zip Neon_Bay_v1.6.1_Standalone_Static.zip > Neon_Bay_v1.6.1_SHA256.txt
+          )
+
+      - name: Commit verified hotfix artifacts
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A overlay-v16 vercel-static package-lock.json release-v1.6.1
+          if git diff --cached --quiet; then
+            echo "No generated changes to commit."
+            exit 0
+          fi
+          git commit -m "Release Neon Bay v1.6.1 stable cinematic hotfix [v1.6.1 generated]"
+          git push origin HEAD:agent/neon-bay-v1.6.1-hotfix

@@ -1,5 +1,46 @@
-<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Neon Bay v1.5 Trailer</title><style>html,body{margin:0;height:100%;background:#030510;color:#fff;font-family:Arial,sans-serif;overflow:hidden}iframe{border:0;width:100%;height:100%}.badge{position:fixed;z-index:5;right:16px;top:16px;background:#07101ddd;border:1px solid #ff4fb788;padding:9px 13px;border-radius:999px;font-weight:900;letter-spacing:.09em;pointer-events:none;box-shadow:0 0 28px #ff4fb733}.note{position:fixed;z-index:5;left:16px;bottom:16px;max-width:440px;background:#050817d9;border-left:3px solid #38e8ff;padding:10px 13px;font-size:11px;line-height:1.45;color:#cbd6e8;pointer-events:none}</style>  <meta name="neon-bay-build" content="v1.6.1 Stable Cinematic Hotfix" />
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
+const VERSION = '1.6.1';
+const BUILD = 'Stable Cinematic Hotfix';
+const ROOT = process.cwd();
+const args = process.argv.slice(2);
+const verifyOnly = args[0] === '--verify-only';
+const targetArg = verifyOnly ? args[1] : args[0];
+const target = path.resolve(ROOT, targetArg || 'dist');
+
+const textExtensions = new Set(['.html', '.css', '.js', '.json', '.svg', '.txt']);
+const saveKeys = ['neon-bay-save-v4', 'neon-bay-save-v3', 'neon-bay-save-v2', 'neon-bay-save-v1'];
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+function walk(directory) {
+  const files = [];
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...walk(absolute));
+    else files.push(absolute);
+  }
+  return files;
+}
+
+function read(file) {
+  return fs.readFileSync(file, 'utf8');
+}
+
+function write(file, content) {
+  fs.writeFileSync(file, content, 'utf8');
+}
+
+function sha256(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+const recoveryCss = `
 <style id="neon-bay-v161-recovery-style">
 #startup-recovery{position:fixed;inset:0;z-index:10000;display:none;place-items:center;padding:24px;background:radial-gradient(circle at 50% 12%,rgba(27,55,104,.96),rgba(3,5,16,.985) 58%);color:#fff;font-family:Arial,Helvetica,system-ui,sans-serif}
 #startup-recovery.visible{display:grid}
@@ -13,11 +54,12 @@
 #startup-recovery button.primary{border-color:#38e8ff;background:linear-gradient(135deg,#0aaec4,#1760d7)}
 #startup-recovery button.danger{border-color:rgba(255,75,92,.65);background:#40131d}
 #startup-recovery .recovery-note{margin-top:14px;font-size:12px;color:#9eabc4}
-</style>
-</head><body><div class="badge">IN-ENGINE v1.5 · GRAPHICS OVERHAUL</div><div class="note">Original in-engine promotional mode. No GTA or Rockstar assets, music, maps or characters are used.</div><iframe title="Neon Bay v1.5 in-engine trailer" src="../index.html?trailer=1" allow="autoplay; fullscreen"></iframe>
+</style>`;
+
+const recoveryMarkup = `
 <div id="startup-recovery" role="alertdialog" aria-modal="true" aria-labelledby="startup-recovery-title">
   <div class="recovery-card">
-    <div class="recovery-eyebrow">NEON BAY v1.6.1 · RECOVERY CONSOLE</div>
+    <div class="recovery-eyebrow">NEON BAY v${VERSION} · RECOVERY CONSOLE</div>
     <h2 id="startup-recovery-title">The city could not start normally.</h2>
     <p id="startup-recovery-status">A safe recovery option is available.</p>
     <pre id="startup-recovery-diagnostics">Collecting diagnostics…</pre>
@@ -28,15 +70,16 @@
     </div>
     <div class="recovery-note">Safe Graphics changes only the graphics preset. Reset Save permanently removes local save-v1 through save-v4 data from this browser.</div>
   </div>
-</div>
+</div>`;
 
+const recoveryScript = `
 <script id="neon-bay-v161-recovery">
 (() => {
   'use strict';
-  const VERSION = "1.6.1";
-  const BUILD = "Stable Cinematic Hotfix";
+  const VERSION = ${JSON.stringify(VERSION)};
+  const BUILD = ${JSON.stringify(BUILD)};
   const QUALITY_KEY = 'neon-bay-quality';
-  const SAVE_KEYS = ["neon-bay-save-v4","neon-bay-save-v3","neon-bay-save-v2","neon-bay-save-v1"];
+  const SAVE_KEYS = ${JSON.stringify(saveKeys)};
   const ATTEMPT_KEY = 'neon-bay-v161-auto-safe-attempt';
   const params = new URLSearchParams(location.search);
   const boot = { error: '', resource: '', started: Date.now(), timer: 0 };
@@ -172,5 +215,137 @@
     }, 500);
   });
 })();
-</script>
-</body></html>
+</script>`;
+
+function patchHtml(htmlFile) {
+  let html = read(htmlFile);
+  html = html
+    .replace(/v1\.6(?!\.\d)/g, `v${VERSION}`)
+    .replace(/Building the city…/g, 'Starting stable cinematic build…')
+    .replace(/href="\/trailer\.html"/g, 'href="./trailer.html"')
+    .replace(/<title>Neon Bay<\/title>/g, `<title>Neon Bay v${VERSION}</title>`);
+
+  if (!html.includes('name="neon-bay-build"')) {
+    html = html.replace('</head>', `  <meta name="neon-bay-build" content="v${VERSION} ${BUILD}" />\n${recoveryCss}\n</head>`);
+  }
+  if (!html.includes('id="startup-recovery"')) {
+    html = html.replace('</body>', `${recoveryMarkup}\n</body>`);
+  }
+  if (!html.includes('id="neon-bay-v161-recovery"')) {
+    const moduleIndex = html.search(/<script\b[^>]*type=["']module["'][^>]*>/i);
+    if (moduleIndex >= 0) html = html.slice(0, moduleIndex) + recoveryScript + '\n' + html.slice(moduleIndex);
+    else html = html.replace('</body>', `${recoveryScript}\n</body>`);
+  }
+  write(htmlFile, html);
+}
+
+function removeExternalFonts(cssFile) {
+  let css = read(cssFile);
+  css = css
+    .replace(/@import\s+url\([^)]*fonts\.googleapis\.com[^)]*\);?\s*/gi, '')
+    .replace(/font-family:\s*Inter\s*,\s*system-ui\s*,\s*sans-serif/gi, 'font-family: Arial, Helvetica, system-ui, sans-serif')
+    .replace(/font-family:\s*['"]?Barlow Condensed['"]?\s*,\s*sans-serif/gi, 'font-family: "Arial Narrow", "Aptos Narrow", Arial, sans-serif');
+  write(cssFile, css);
+}
+
+function resolveReference(fromFile, reference) {
+  const clean = reference.split('#')[0].split('?')[0];
+  if (!clean || clean.startsWith('data:') || clean.startsWith('blob:') || clean.startsWith('mailto:') || clean.startsWith('javascript:')) return null;
+  if (/^[a-z]+:/i.test(clean) || clean.startsWith('//')) return null;
+  if (clean.startsWith('/')) return path.join(target, clean.slice(1));
+  return path.resolve(path.dirname(fromFile), clean);
+}
+
+function collectReferences(file, content) {
+  const references = new Set();
+  const extension = path.extname(file).toLowerCase();
+  const patterns = [];
+  if (extension === '.html') patterns.push(/\b(?:src|href)=["']([^"']+)["']/gi);
+  if (extension === '.css') patterns.push(/url\(\s*["']?([^"')]+)["']?\s*\)/gi);
+  if (extension === '.js') patterns.push(/\bfrom\s*["']([^"']+)["']/g, /\bimport\(\s*["']([^"']+)["']\s*\)/g, /new\s+URL\(\s*["']([^"']+)["']/g);
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(content))) references.add(match[1]);
+  }
+  return [...references];
+}
+
+function validateRuntime(rootDir) {
+  assert(fs.existsSync(rootDir), `Missing build directory: ${rootDir}`);
+  const indexFile = path.join(rootDir, 'index.html');
+  assert(fs.existsSync(indexFile), 'Missing index.html');
+
+  const files = walk(rootDir);
+  const textFiles = files.filter((file) => textExtensions.has(path.extname(file).toLowerCase()));
+  const missing = [];
+  const external = [];
+  const jsFiles = [];
+
+  for (const file of textFiles) {
+    const content = read(file);
+    const relative = path.relative(rootDir, file).split(path.sep).join('/');
+    if (path.extname(file).toLowerCase() === '.js') jsFiles.push(file);
+
+    const dependencyPatterns = [
+      /<(?:script|link|img|iframe)\b[^>]*(?:src|href)=["']https?:\/\//i,
+      /@import\b[^;]*https?:\/\//i,
+      /url\(\s*["']?https?:\/\//i,
+      /\b(?:from|import\()\s*["']https?:\/\//i,
+      /cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com/i,
+    ];
+    if (dependencyPatterns.some((pattern) => pattern.test(content))) external.push(relative);
+
+    for (const reference of collectReferences(file, content)) {
+      const resolved = resolveReference(file, reference);
+      if (resolved && !fs.existsSync(resolved)) missing.push(`${relative} -> ${reference}`);
+    }
+  }
+
+  assert(external.length === 0, `External runtime dependencies found in: ${external.join(', ')}`);
+  assert(missing.length === 0, `Missing emitted references:\n${missing.join('\n')}`);
+  assert(jsFiles.length > 0, 'No JavaScript bundle was emitted');
+
+  for (const file of jsFiles) execFileSync(process.execPath, ['--check', file], { stdio: 'pipe' });
+
+  const index = read(indexFile);
+  assert(index.includes(`v${VERSION}`), 'Version label was not updated to v1.6.1');
+  assert(index.includes('startup-recovery'), 'Recovery console was not injected');
+  assert(index.includes('neon-bay-v161-recovery'), 'Recovery bootstrap was not injected');
+  assert(index.includes('Reset Save and Retry'), 'Reset Save recovery action is missing');
+  assert(index.includes('Start Safe Graphics'), 'Safe Graphics recovery action is missing');
+
+  const engineFiles = files.filter((file) => /neon-bay-v1\.6\.1-engine\.[^/]+\.js$/.test(file.split(path.sep).join('/')));
+  const cssFiles = files.filter((file) => /neon-bay-v1\.6\.1-styles\.[^/]+\.css$/.test(file.split(path.sep).join('/')));
+  assert(engineFiles.length === 1, `Expected one cache-busted engine bundle, found ${engineFiles.length}`);
+  assert(cssFiles.length >= 1, `Expected a cache-busted CSS bundle, found ${cssFiles.length}`);
+
+  return {
+    version: VERSION,
+    build: BUILD,
+    files: files.length,
+    javascript: jsFiles.length,
+    engine: path.relative(rootDir, engineFiles[0]).split(path.sep).join('/'),
+    styles: cssFiles.map((file) => path.relative(rootDir, file).split(path.sep).join('/')),
+    indexSha256: sha256(indexFile),
+  };
+}
+
+if (!verifyOnly) {
+  assert(fs.existsSync(target), `Build output does not exist: ${target}`);
+  for (const file of walk(target).filter((file) => path.extname(file).toLowerCase() === '.html')) patchHtml(file);
+  for (const file of walk(target).filter((file) => path.extname(file).toLowerCase() === '.css')) removeExternalFonts(file);
+
+  const buildInfo = {
+    name: 'Neon Bay',
+    version: VERSION,
+    release: BUILD,
+    generatedAt: new Date().toISOString(),
+    deployment: 'self-contained static Vite bundle',
+    saveSchema: 'v4',
+    recovery: ['automatic safe graphics retry', 'manual safe graphics', 'reset save and retry', 'cache-busted retry'],
+  };
+  write(path.join(target, 'BUILD_INFO.json'), `${JSON.stringify(buildInfo, null, 2)}\n`);
+}
+
+const report = validateRuntime(target);
+console.log(JSON.stringify({ hotfix: 'ok', mode: verifyOnly ? 'verify-only' : 'package', ...report }, null, 2));

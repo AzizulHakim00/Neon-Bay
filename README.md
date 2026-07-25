@@ -1,9 +1,26 @@
-# Neon Bay v1.6 — Cinematic City Overhaul
+# Neon Bay v1.6.1 — Stable Cinematic Hotfix
 
-**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.6 turns the ten-mission Vice Coast release into a more cinematic, materially detailed city with improved lighting, roads, vehicles, weather, windows, shoreline effects and mission presentation while preserving save schema v4.
+**Neon Bay** is an original browser-based 3D open-city action game built with Three.js and Vite. Version 1.6.1 stabilizes the cinematic v1.6 release with a self-contained browser bundle, startup recovery tools and cache-busted static assets while preserving save schema v4 and the complete ten-mission Vice Coast experience.
 
 The release takes inspiration from the atmosphere of classic tropical open-world games, but all branding, characters, districts, missions, music, dialogue and low-poly artwork are original. It does not copy GTA: Vice City maps, characters, logos, music, scripts or proprietary assets.
 
+## Download v1.6.1
+
+- [Complete source package](release-v1.6.1/Neon_Bay_v1.6.1_Complete_Source.zip)
+- [Standalone static deployment](release-v1.6.1/Neon_Bay_v1.6.1_Standalone_Static.zip)
+- [SHA-256 checksums](release-v1.6.1/Neon_Bay_v1.6.1_SHA256.txt)
+
+## v1.6.1 stable cinematic hotfix
+
+- Replaced runtime fragment fetching, source patching and Blob-module reconstruction with a normal bundled engine entry point
+- Bundled Three.js and every dynamic post-processing chunk locally
+- Removed CDN and Google Fonts runtime dependencies
+- Added cache-busted v1.6.1 JavaScript and CSS filenames
+- Added startup diagnostics and a twelve-second stalled-startup detector
+- Added automatic one-time Safe Graphics recovery
+- Added manual Safe Graphics, Retry Startup and Reset Save and Retry actions
+- Preserved Vercel's no-install, no-build deployment from `vercel-static/`
+- Added reproducible release ZIP generation and SHA-256 manifests
 
 ## v1.6 cinematic city overhaul
 
@@ -102,26 +119,25 @@ npm install
 npm run dev
 ```
 
-## Validate and build
+## Build and validate v1.6.1
 
 ```bash
-npm test
+npm install
+npm run build:hotfix
+node scripts/test-v161-recovery.mjs dist
 ```
 
-The automated suite validates:
+The v1.6.1 release workflow validates:
 
-- JavaScript syntax
-- Seven character animation clips
-- Five playable interiors
-- Vehicle damage and repair
-- Living-city traffic, wanted and progression systems
-- Vice Coast businesses, districts, radio stations and Chapter Two definitions
-- Save v4, SMG purchase, nightclub purchase, phone, radio and pause/resume smoke flows
-- All ten story mission flows
-- Mission checkpoint collision reachability
-- Production Vite build
+- JavaScript syntax across every emitted bundle and dynamic chunk
+- HTML, CSS and JavaScript file references
+- Absence of external runtime dependencies
+- Cache-busted engine and stylesheet names
+- Safe Graphics and Reset Save recovery behavior
+- Local HTTP `200` responses for the complete static directory
+- Complete-source and standalone-static SHA-256 checksums
 
-The source build generates `dist/`. Vercel serves the verified browser-ready release from `vercel-static/` without running a remote build.
+Vercel serves the committed browser-ready release from `vercel-static/` without installing dependencies or running a remote build.
 
 ## Performance
 
@@ -136,4 +152,4 @@ Low, Medium, High and Ultra presets scale shadows, SSAO, FXAA, wetness, clouds, 
 
 ## Legal and scope
 
-All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.6 focuses on an original cinematic tropical city, scalable browser graphics and strong game systems rather than copying another game's content.
+All game content in this repository is original. Neon Bay is an ambitious browser-game project, not a full commercial GTA-sized production. Version 1.6.1 focuses on stable startup, a self-contained browser release, scalable cinematic graphics and strong game systems rather than copying another game's content.
