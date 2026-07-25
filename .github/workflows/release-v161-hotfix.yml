@@ -44,19 +44,14 @@ jobs:
           set -o pipefail
           npm run build:hotfix 2>&1 | tee /tmp/neon-bay-v161-build.log
 
-      - name: Preserve build diagnostics
-        if: failure()
-        shell: bash
-        run: |
-          mkdir -p diagnostics
-          cp /tmp/neon-bay-v161-build.log diagnostics/v161-build.log
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add diagnostics/v161-build.log
-          if ! git diff --cached --quiet; then
-            git commit -m "Capture v1.6.1 hotfix build diagnostics [skip hotfix]"
-            git push origin HEAD:agent/neon-bay-v1.6.1-hotfix
-          fi
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v161-build-log
+          path: /tmp/neon-bay-v161-build.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Test recovery controls
         run: node scripts/test-v161-recovery.mjs dist
@@ -127,8 +122,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          rm -f diagnostics/v161-build.log
-          git add -A vercel-static package-lock.json release-v1.6.1 diagnostics
+          git add -A vercel-static package-lock.json release-v1.6.1
           if git diff --cached --quiet; then
             echo "No generated changes to commit."
             exit 0
