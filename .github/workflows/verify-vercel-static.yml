@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - 'vercel-static/**'
-      - 'scripts/verify-vercel-static.mjs'
-      - 'scripts/verify-vercel-static-v16.mjs'
+      - 'scripts/package-v161-hotfix.mjs'
+      - 'scripts/prepare-v161-packager.mjs'
+      - 'scripts/test-v161-recovery.mjs'
+      - '.github/workflows/verify-vercel-static.yml'
       - 'vercel.json'
   workflow_dispatch:
 
@@ -23,5 +25,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify browser-ready v1.6 release
-        run: node --experimental-vm-modules scripts/verify-vercel-static.mjs vercel-static
+      - name: Verify browser-ready v1.6.1 release
+        run: |
+          node scripts/prepare-v161-packager.mjs
+          node scripts/package-v161-hotfix.mjs --verify-only vercel-static
+          node scripts/test-v161-recovery.mjs vercel-static
