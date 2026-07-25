@@ -3,10 +3,10 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const staticRoot = resolve(root, 'vercel-static');
+const overlayRoot = resolve(root, 'overlay-v16');
 const srcRoot = resolve(root, 'src');
 const mainPath = resolve(srcRoot, 'main.js');
-const { V16_ENGINE_PATCHES } = await import(pathToFileURL(resolve(staticRoot, 'src/v16-engine-patch.js')).href);
+const { V16_ENGINE_PATCHES } = await import(pathToFileURL(resolve(overlayRoot, 'v16-engine-patch.js')).href);
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const flexiblePattern = (value) => value
@@ -40,8 +40,8 @@ for (const [index, patch] of V16_ENGINE_PATCHES.entries()) {
 
 await mkdir(resolve(srcRoot, 'modules'), { recursive: true });
 await writeFile(mainPath, source, 'utf8');
-await copyFile(resolve(staticRoot, 'src/styles.css'), resolve(srcRoot, 'styles.css'));
-await copyFile(resolve(staticRoot, 'src/modules/cinematic-city-v16.js'), resolve(srcRoot, 'modules/cinematic-city-v16.js'));
+await copyFile(resolve(overlayRoot, 'styles.css'), resolve(srcRoot, 'styles.css'));
+await copyFile(resolve(overlayRoot, 'modules/cinematic-city-v16.js'), resolve(srcRoot, 'modules/cinematic-city-v16.js'));
 
 const indexPath = resolve(root, 'index.html');
 let index = await readFile(indexPath, 'utf8');
