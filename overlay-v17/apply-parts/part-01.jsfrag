@@ -1,0 +1,83 @@
+|| 1);\n    const boost = boostHeld && state.nitro > .5;\n    if (boost) state.nitro = Math.max(0, state.nitro - dt * 24); else state.nitro = Math.min(nitroMax, state.nitro + dt * 7.5);\n    const handbrake = input.keys.has('Space');",
+  'nitro control');
+
+source = replaceOnce(source,
+  "    const targetMax = p.maxSpeed * (boost ? 1.1 : 1) * upgradeEngine * engineFactor;",
+  "    const targetMax = p.maxSpeed * (boost ? 1.24 : 1) * upgradeEngine * engineFactor;",
+  'nitro speed');
+
+source = replaceOnce(source,
+  "function updateAI(dt) {\n  enemies.forEach(e=>e.update(dt));\n  pedestrians.forEach(e=>e.update(dt));\n  vehicles.forEach(v=>v.update(dt));\n}",
+  "function updateAI(dt) {\n  const p=getPlayerPosition();\n  enemies.forEach((e,index)=>{const distance=e.group.position.distanceTo(p);if(distance<115||index%2===Math.floor(worldTime*10)%2)e.update(dt);});\n  pedestrians.forEach((e,index)=>{const distance=e.group.position.distanceTo(p);const stride=state.quality==='low'?4:state.quality==='medium'?3:2;if(distance<48||index%stride===Math.floor(worldTime*8)%stride)e.update(dt);});\n  vehicles.forEach((v,index)=>{const distance=v.mesh.position.distanceTo(p);if(v===state.activeVehicle||v.type==='police'||distance<125||index%2===Math.floor(worldTime*7)%2)v.update(dt);});\n}",
+  'performance-aware AI');
+
+source = replaceOnce(source,
+  "    const profile=wantedProfile(state.wanted);\n    state.wantedHeat-=dt;wantedSpawnTimer-=dt;state.wantedLastKnown.copy(getPlayerPosition());",
+  "    const profile=v17WantedProfile(state.wanted);\n    state.wantedHeat-=dt*(v17Director?.skillEffect('heatDecay')||1);wantedSpawnTimer-=dt;",
+  'wanted search memory');
+
+source = replaceOnce(source,
+  "      if(activePolice<profile.officers){const a=rand(0,Math.PI*2),r=rand(24,42);new CharacterAI(pos.x+Math.cos(a)*r,pos.z+Math.sin(a)*r,{police:true,health:82,role:'police'});}\n      if(policeCruisers.length<profile.cruisers)spawnPoliceCruiser();\n      if(state.wanted>=2)spawnRoadblock();",
+  "      if(activePolice<profile.officers){const a=rand(0,Math.PI*2),r=rand(24,42);const tactical=state.wanted>=4&&activePolice<profile.tactical;new CharacterAI(pos.x+Math.cos(a)*r,pos.z+Math.sin(a)*r,{police:true,health:tactical?130:88,role:tactical?'tactical':'police',speed:tactical?6.4:5.5});}\n      if(policeCruisers.length<profile.cruisers)spawnPoliceCruiser();\n      if(profile.roadblocks>0)spawnRoadblock();",
+  'wanted response tiers');
+
+source = replaceOnce(source,
+  "      state.wanted--;state.wantedHeat=state.wanted>0?wantedProfile(state.wanted).heat*.45:0;",
+  "      state.wanted--;state.wantedHeat=state.wanted>0?v17WantedProfile(state.wanted).heat*.45:0;",
+  'wanted decay profile');
+
+source = replaceOnce(source,
+  "  updateBusinessEmpire(dt);\n  visualOverhaul?.update(dt",
+  "  updateBusinessEmpire(dt);\n  updateV17Systems(dt);\n  visualOverhaul?.update(dt",
+  'v17 world update');
+
+const oldShoot = `function shoot() {
+  if(!state.running||state.paused||state.activeVehicle||state.reloading||state.cinematic)return;
+  const weapon=WEAPONS[state.weapon];
+  const now=performance.now();if(now-lastShotAt<weapon.cooldown)return;lastShotAt=now;
+  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Weapon empty. Press R to reload.',1.5);return;}
+  state.ammo--;progression.record('shotsFired');audio.shot();raycaster.setFromCamera(new THREE.Vector2(0,0),camera);visualOverhaul?.emitShot(camera.position.clone(),raycaster.ray.direction.clone(),state.weapon);if(state.weapon==='shotgun'){audio.noise(.16,.3);cameraPitch=clamp(cameraPitch+.035,-.75,.32);}
+  playerActor?.playOneShot('Shoot',state.weapon==='shotgun'?.42:.28);
+  const targets=[];enemies.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  pedestrians.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  const damaged=new Map();
+  for(let pellet=0;pellet<weapon.pellets;pellet++){
+    const aim=new THREE.Vector2((random()-.5)*weapon.spread,(random()-.5)*weapon.spread);
+    raycaster.setFromCamera(aim,camera);const hit=raycaster.intersectObjects(targets,false)[0];
+    if(hit&&hit.distance<(state.weapon==='shotgun'?48:90)){const entity=hit.object.userData.entity;if(entity)damaged.set(entity,(damaged.get(entity)||0)+weapon.damage);}
+  }
+  damaged.forEach((damage,entity)=>{progression.record('hits');entity.takeDamage(entity.boss?damage*.72:damage);});
+  state.weaponData[state.weapon].ammo=state.ammo;
+  lastGunshotPosition=getPlayerPosition().clone();lastGunshotAt=worldTime;
+  raiseWanted('gunfire',state.wanted||1);
+}`;
+
+const newShoot = `function shoot() {
+  if(!state.running||state.paused||state.activeVehicle||state.reloading||state.cinematic)return;
+  const weapon=WEAPONS[state.weapon];
+  const now=performance.now();if(now-lastShotAt<weapon.cooldown)return;lastShotAt=now;
+  if(state.ammo<=0){audio.tone(120,.05,'square',.06);notify('Weapon empty. Press R to reload.',1.5);return;}
+  state.ammo--;progression.record('shotsFired');audio.shot();raycaster.setFromCamera(new THREE.Vector2(0,0),camera);visualOverhaul?.emitShot(camera.position.clone(),raycaster.ray.direction.clone(),state.weapon);
+  const recoil=weapon.recoil*(v17Director?.skillEffect('recoil')||1);cameraPitch=clamp(cameraPitch+recoil,-.75,.32);cameraYaw+=(random()-.5)*recoil*.65;
+  if(state.weapon==='shotgun')audio.noise(.16,.3);
+  playerActor?.playOneShot('Shoot',state.weapon==='shotgun'?.42:.28);
+  const targets=[];enemies.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  pedestrians.filter(e=>e.alive).forEach(e=>e.group.traverse(o=>{if(o.isMesh)targets.push(o);}));
+  const damaged=new Map();let shotHit=false,shotHeadshot=false;
+  const spread=weapon.spread*(v17Director?.skillEffect('spread')||1)*(v17Director?.weaponEffect(state.weapon,'accuracy')||1);
+  for(let pellet=0;pellet<weapon.pellets;pellet++){
+    const aim=new THREE.Vector2((random()-.5)*spread,(random()-.5)*spread);
+    raycaster.setFromCamera(aim,camera);const hit=raycaster.intersectObjects(targets,false)[0];
+    if(hit&&hit.distance<weapon.range){const entity=hit.object.userData.entity;if(entity){const headshot=hit.point.y-entity.group.position.y>1.62;const falloff=1-clamp(hit.distance/weapon.range,0,1)*weapon.falloff;let damage=weapon.damage*falloff*(v17Director?.weaponEffect(state.weapon,'damage')||1);if(headshot)damage*=1.65*(v17Director?.skillEffect('headshot')||1);const entry=damaged.get(entity)||{damage:0,headshot:false};entry.damage+=damage;entry.headshot ||= headshot;damaged.set(entity,entry);shotHit=true;shotHeadshot ||= headshot;}}
+  }
+  damaged.forEach((entry,entity)=>{progression.record('hits');entity.takeDamage(entity.boss?entry.damage*.72:entry.damage);});
+  v17Director?.recordShot({hit:shotHit,headshot:shotHeadshot});if(shotHit)v17Director?.showHit(shotHeadshot);
+  state.weaponData[state.weapon].ammo=state.ammo;
+  lastGunshotPosition=getPlayerPosition().clone();lastGunshotAt=worldTime;
+  raiseWanted('gunfire',state.wanted||1);
+}`;
+source = replaceOnce(source, oldShoot, newShoot, 'combat overhaul');
+
+source = replaceOnce(source,
+  "  setTimeout(()=>{const needed=weapon.mag-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;state.reloading=false;dom.weaponName.textContent=weapon.name;audio.tone(420,.08,'square',.05);},weapon.reload);",
+  "  const reloadTime=weapon.reload*(v17Director?.skillEffect('reload')||1)*(v17Director?.weaponEffect(state.weapon,'reload')||1);setTimeout(()=>{const needed=weapon.mag-state.ammo,take=Math.min(needed,state.reserve);state.ammo+=take;state.reserve-=take;state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=
