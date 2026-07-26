@@ -1,0 +1,257 @@
+name: Neon Bay v1.6.2 runtime diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neon-bay-v162-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build verified static release
+        run: npm run build:hotfix
+
+      - name: Verify packaged release
+        run: |
+          node scripts/package-v161-hotfix.mjs --verify-only dist
+          node scripts/test-v161-recovery.mjs dist
+
+      - name: Install Chromium smoke-test runtime
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run rendered browser diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-diagnostics
+          python3 -m http.server 4173 --directory dist >runtime-diagnostics/http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/index.html >/dev/null; then break; fi
+            sleep 0.25
+          done
+          node --input-type=module <<'NODE' 2>&1 | tee runtime-diagnostics/browser.log
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
+
+          const failures = [];
+          const consoleLines = [];
+          const browser = await chromium.launch({
+            headless: true,
+            args: [
+              '--enable-webgl',
+              '--ignore-gpu-blocklist',
+              '--use-gl=angle',
+              '--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader',
+              '--disable-dev-shm-usage',
+              '--no-sandbox'
+            ]
+          });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+          const page = await context.newPage();
+          await page.addInitScript(() => {
+            HTMLCanvasElement.prototype.requestPointerLock = () => Promise.resolve();
+            document.exitPointerLock = () => {};
+          });
+          page.on('console', msg => {
+            const line = `[console:${msg.type()}] ${msg.text()}`;
+            consoleLines.push(line);
+            console.log(line);
+            if (msg.type() === 'error') failures.push(line);
+          });
+          page.on('pageerror', error => {
+            const line = `[pageerror] ${error.stack || error.message}`;
+            consoleLines.push(line);
+            failures.push(line);
+            console.log(line);
+          });
+          page.on('requestfailed', request => {
+            const line = `[requestfailed] ${request.url()} :: ${request.failure()?.errorText || 'unknown'}`;
+            consoleLines.push(line);
+            failures.push(line);
+            console.log(line);
+          });
+
+          const response = await page.goto('http://127.0.0.1:4173/index.html?diagnostic=1', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+          });
+          if (!response || !response.ok()) failures.push(`index response was ${response?.status() || 'missing'}`);
+
+          const webgl = await page.evaluate(() => {
+            const canvas = document.createElement('canvas');
+            const gl2 = canvas.getContext('webgl2');
+            const gl1 = gl2 || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            return { ok: Boolean(gl1), mode: gl2 ? 'webgl2' : gl1 ? 'webgl1' : 'none' };
+          });
+          console.log('WebGL probe:', webgl);
+          if (!webgl.ok) failures.push('Chromium did not expose a WebGL context');
+
+          await page.waitForTimeout(2500);
+          const startupState = await page.evaluate(() => ({
+            loadingActive: document.querySelector('#loading-screen')?.classList.contains('active') || false,
+            menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+            recoveryVisible: document.querySelector('#startup-recovery')?.classList.contains('visible') || false,
+            canvasWidth: document.querySelector('#game-canvas')?.width || 0,
+            canvasHeight: document.querySelector('#game-canvas')?.height || 0,
+            build: document.querySelector('meta[name="neon-bay-build"]')?.content || ''
+          }));
+          console.log('Startup state:', startupState);
+
+          if (!startupState.menuActive) await page.waitForTimeout(12500);
+          const finalState = await page.evaluate(() => ({
+            loadingActive: document.querySelector('#loading-screen')?.classList.contains('active') || false,
+            menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+            recoveryVisible: document.querySelector('#startup-recovery')?.classList.contains('visible') || false,
+            diagnostics: document.querySelector('#startup-recovery-diagnostics')?.textContent || ''
+          }));
+          console.log('Final startup state:', finalState);
+
+          if (!finalState.menuActive) failures.push(`Main menu did not activate: ${JSON.stringify(finalState)}`);
+          if (finalState.recoveryVisible) failures.push(`Recovery console became visible: ${finalState.diagnostics}`);
+
+          const layout = await page.evaluate(() => {
+            const menu = document.querySelector('#main-menu');
+            const root = document.querySelector('#game-root');
+            let cssRuleCount = 0;
+            for (const sheet of document.styleSheets) {
+              try { cssRuleCount += sheet.cssRules?.length || 0; } catch {}
+            }
+            return {
+              menuPosition: menu ? getComputedStyle(menu).position : '',
+              menuDisplay: menu ? getComputedStyle(menu).display : '',
+              rootHeight: root ? getComputedStyle(root).height : '',
+              bodyOverflow: getComputedStyle(document.body).overflow,
+              bodyScrollHeight: document.body.scrollHeight,
+              viewportHeight: innerHeight,
+              cssRuleCount
+            };
+          });
+          console.log('Layout state:', layout);
+          if (layout.menuPosition !== 'fixed' || layout.menuDisplay !== 'flex') failures.push(`Game stylesheet did not apply correctly: ${JSON.stringify(layout)}`);
+          if (layout.bodyOverflow !== 'hidden' || layout.bodyScrollHeight > layout.viewportHeight + 4) failures.push(`Page is scrolling instead of behaving like a game viewport: ${JSON.stringify(layout)}`);
+          if (layout.cssRuleCount < 50) failures.push(`Too few parsed CSS rules: ${layout.cssRuleCount}`);
+          await page.screenshot({ path: 'runtime-diagnostics/menu.png' });
+
+          if (finalState.menuActive) {
+            await page.locator('#how-btn').click();
+            await page.waitForTimeout(200);
+            const howVisible = await page.locator('#how-panel').evaluate(el => !el.classList.contains('hidden'));
+            if (!howVisible) failures.push('How to Play button did not open its modal');
+            await page.locator('#how-panel .close-modal').click();
+
+            await page.locator('#settings-btn').click();
+            await page.waitForTimeout(200);
+            const settingsVisible = await page.locator('#settings-panel').evaluate(el => !el.classList.contains('hidden'));
+            if (!settingsVisible) failures.push('Settings button did not open its modal');
+            await page.locator('#quality-select').selectOption('low');
+            await page.locator('#settings-panel .close-modal').click();
+
+            await page.locator('#new-game-btn').click();
+            await page.waitForTimeout(1800);
+            const gameplay = await page.evaluate(() => ({
+              hudVisible: !document.querySelector('#hud')?.classList.contains('hidden'),
+              menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+              pauseActive: document.querySelector('#pause-menu')?.classList.contains('active') || false,
+              missionTitle: document.querySelector('#mission-title')?.textContent || '',
+              objective: document.querySelector('#mission-objective')?.textContent || '',
+              canvasDisplay: getComputedStyle(document.querySelector('#game-canvas')).display
+            }));
+            console.log('Gameplay state:', gameplay);
+            if (!gameplay.hudVisible || gameplay.menuActive || gameplay.pauseActive || !gameplay.missionTitle || !gameplay.objective || gameplay.canvasDisplay === 'none') {
+              failures.push(`New Game did not enter a playable HUD state: ${JSON.stringify(gameplay)}`);
+            }
+            await page.screenshot({ path: 'runtime-diagnostics/gameplay.png' });
+
+            await page.keyboard.press('p');
+            await page.waitForTimeout(200);
+            const phoneOpen = await page.locator('#phone-panel').evaluate(el => !el.classList.contains('hidden'));
+            if (!phoneOpen) failures.push('Phone did not open with P');
+            await page.keyboard.press('p');
+
+            await page.keyboard.press('Escape');
+            await page.waitForTimeout(200);
+            const paused = await page.locator('#pause-menu').evaluate(el => el.classList.contains('active'));
+            if (!paused) failures.push('Pause menu did not open with Escape');
+            await page.locator('#save-btn').click();
+            const savePresent = await page.evaluate(() => Boolean(localStorage.getItem('neon-bay-save-v4')));
+            if (!savePresent) failures.push('Save Game did not create save-v4 data');
+            await page.locator('#quit-btn').click();
+            const returned = await page.evaluate(() => ({
+              menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+              continueDisabled: document.querySelector('#continue-btn')?.disabled ?? true,
+              hudHidden: document.querySelector('#hud')?.classList.contains('hidden') || false
+            }));
+            if (!returned.menuActive || returned.continueDisabled || !returned.hudHidden) failures.push(`Main-menu return/save state failed: ${JSON.stringify(returned)}`);
+          }
+
+          await page.screenshot({ path: 'runtime-diagnostics/final.png' });
+          fs.writeFileSync('runtime-diagnostics/summary.json', JSON.stringify({ webgl, startupState, finalState, layout, failures, consoleLines }, null, 2));
+          await browser.close();
+          if (failures.length) {
+            console.error(`Runtime smoke test found ${failures.length} failure(s).`);
+            process.exit(1);
+          }
+          console.log('Runtime smoke test passed.');
+          NODE
+
+      - name: Publish verified browser-ready static directory
+        if: success() && github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          rm -rf vercel-static
+          mkdir -p vercel-static
+          cp -a dist/. vercel-static/
+          node scripts/package-v161-hotfix.mjs --verify-only vercel-static
+          node scripts/test-v161-recovery.mjs vercel-static
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A vercel-static
+          if git diff --cached --quiet; then
+            echo "Verified static directory is already current."
+          else
+            git commit -m "Publish verified Neon Bay runtime fix"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
+      - name: Package checked-out source for analysis
+        if: always()
+        run: |
+          git archive --format=zip --output=runtime-diagnostics/neon-bay-source.zip HEAD
+
+      - name: Upload runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v162-runtime-diagnostics
+          path: runtime-diagnostics/
+          if-no-files-found: error
+          retention-days: 7
