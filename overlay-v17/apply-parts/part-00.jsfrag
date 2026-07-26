@@ -1,0 +1,106 @@
+import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const overlay = resolve(root, 'overlay-v17');
+const mainPath = resolve(root, 'src/main.js');
+
+const replaceOnce = (source, before, after, label) => {
+  const count = source.split(before).length - 1;
+  if (count !== 1) throw new Error(`v1.7 patch ${label} expected one match, found ${count}`);
+  return source.replace(before, () => after);
+};
+
+let source = await readFile(mainPath, 'utf8');
+
+source = replaceOnce(source,
+  "import { buildRoadRoutes, makeSidewalkRoutine, trafficLightState, wantedProfile, ProgressionSystem, SIDE_ACTIVITY_DEFINITIONS } from './modules/living-city.js';",
+  "import { buildRoadRoutes, makeSidewalkRoutine, trafficLightState, ProgressionSystem, SIDE_ACTIVITY_DEFINITIONS } from './modules/living-city.js';\nimport { LivingCityV17, v17WantedProfile } from './modules/living-city-v17.js';",
+  'living city import');
+
+source = replaceOnce(source,
+  "  saveKey: 'neon-bay-save-v4',\n  legacySaveKey: 'neon-bay-save-v3',",
+  "  saveKeyPrefix: 'neon-bay-save-v5-slot-',\n  saveIndexKey: 'neon-bay-save-v5-index',\n  backupKeyPrefix: 'neon-bay-save-v5-backup-',\n  legacySaveKey: 'neon-bay-save-v4',\n  olderLegacySaveKey: 'neon-bay-save-v3',",
+  'save configuration');
+
+source = replaceOnce(source,
+  "  oldestSaveKey: 'neon-bay-save-v1'\n};",
+  "  oldestSaveKey: 'neon-bay-save-v1'\n};",
+  'save tail noop');
+source = source.replace("  olderSaveKey: 'neon-bay-save-v2',", "  olderSaveKey: 'neon-bay-save-v2',");
+
+source = replaceOnce(source,
+  "  wanted: 0,\n  wantedHeat: 0,",
+  "  wanted: 0,\n  wantedHeat: 0,\n  nitro: 100,\n  saveSlot: Number(localStorage.getItem('neon-bay-save-v5-index')) || 1,\n  eventKills: 0,\n  eventTime: 0,",
+  'state additions');
+
+source = replaceOnce(source,
+  "const WEAPONS = {\n  pistol: { name:'9MM PISTOL', mag:12, cooldown:220, reload:1050, damage:42, pellets:1, spread:0 },\n  shotgun: { name:'PUMP SHOTGUN', mag:6, cooldown:760, reload:1450, damage:24, pellets:7, spread:.045 },\n  smg: { name:'VICE SMG', mag:30, cooldown:92, reload:1350, damage:19, pellets:1, spread:.018 }\n};",
+  "const WEAPONS = {\n  pistol: { name:'9MM PISTOL', mag:12, cooldown:220, reload:1050, damage:42, pellets:1, spread:.006, recoil:.014, range:95, falloff:.24 },\n  shotgun: { name:'PUMP SHOTGUN', mag:6, cooldown:760, reload:1450, damage:24, pellets:7, spread:.045, recoil:.042, range:50, falloff:.48 },\n  smg: { name:'VICE SMG', mag:30, cooldown:92, reload:1350, damage:19, pellets:1, spread:.018, recoil:.012, range:78, falloff:.34 }\n};",
+  'weapon definitions');
+
+source = replaceOnce(source,
+  "let composer=null, bloomPass=null, cinematicPass=null, ssaoPass=null, fxaaPass=null, oceanSurface=null, skyDome=null, sunDisc=null, visualOverhaul=null, cinematicCity=null;",
+  "let composer=null, bloomPass=null, cinematicPass=null, ssaoPass=null, fxaaPass=null, oceanSurface=null, skyDome=null, sunDisc=null, visualOverhaul=null, cinematicCity=null, v17Director=null, eventMarker=null;",
+  'v17 globals');
+
+source = replaceOnce(source,
+  "    this.missionTarget = !!options.missionTarget;",
+  "    this.missionTarget = !!options.missionTarget;\n    this.eventTarget = !!options.eventTarget;",
+  'event target state');
+
+source = replaceOnce(source,
+  "    this.aiState = this.passive ? 'routine' : 'patrol';\n    this.searchTimer = 0;",
+  "    this.aiState = this.passive ? 'routine' : 'patrol';\n    this.v17Profile = null;\n    this.reactionTimer = rand(.05,.35);\n    this.flankDirection = random() > .5 ? 1 : -1;\n    this.suppressedUntil = 0;\n    this.morale = this.boss ? 1 : rand(.55,1);\n    this.searchTimer = 0;",
+  'enemy state');
+
+source = replaceOnce(source,
+  "    if (this.passive) return this.updateWander(dt);\n    const target = getPlayerPosition();",
+  "    if (this.passive) return this.updateWander(dt);\n    if (v17Director && updateV17Enemy(this, dt)) return;\n    const target = getPlayerPosition();",
+  'enemy update hook');
+
+source = replaceOnce(source,
+  "    this.health -= amount;\n    audio.hit();",
+  "    this.health -= amount;\n    this.suppressedUntil = worldTime + clamp(amount / 18, .4, 2.4);\n    this.morale = Math.max(0, this.morale - amount / Math.max(80, this.health + amount) * .24);\n    audio.hit();",
+  'enemy suppression');
+
+source = replaceOnce(source,
+  "    if (this.missionTarget) state.missionKills++;\n    if (this.police) { raiseWanted('officer',3); }",
+  "    if (this.missionTarget) state.missionKills++;\n    if (!this.police) v17Director?.recordKill();\n    if (this.eventTarget) state.eventKills++;\n    if (this.police) { raiseWanted('officer',4); }",
+  'kill tracking');
+
+source = replaceOnce(source,
+  "      if (impact > 8) { applyVehicleImpact(this,impact,'front'); visualOverhaul?.emitImpact(this.mesh.position.clone(), impact); damagePlayer(impact * .1); audio.hit(); }",
+  "      if (impact > 8) { const impactFactor=v17Director?.skillEffect('vehicleDamage')||1; applyVehicleImpact(this,impact*impactFactor,'front'); visualOverhaul?.emitImpact(this.mesh.position.clone(), impact); damagePlayer(impact * .1 * impactFactor); audio.hit(); }",
+  'reinforced vehicle frame');
+
+source = replaceOnce(source,
+  "  state.wanted=clamp(Math.max(state.wanted,minimum),0,3);\n  const profile=wantedProfile(state.wanted);",
+  "  state.wanted=clamp(Math.max(state.wanted,minimum),0,5);\n  const profile=v17WantedProfile(state.wanted);",
+  'five star wanted');
+
+source = replaceOnce(source,
+  "function spawnRoadblock(){\n  if(roadblocks.length>=2)return;",
+  "function spawnRoadblock(){\n  if(roadblocks.length>=v17WantedProfile(state.wanted).roadblocks)return;",
+  'roadblock scaling');
+
+source = replaceOnce(source,
+  "  for (const payout of businessEmpire.update(dt)) {\n    state.cash += payout.income;\n    progression.record('moneyEarned', payout.income);",
+  "  for (const payout of businessEmpire.update(dt)) {\n    const income = Math.round(payout.income * (v17Director?.skillEffect('businessIncome') || 1));\n    state.cash += income;\n    progression.record('moneyEarned', income);",
+  'business income skill');
+source = source.replace("notify(`${payout.name} income +$${payout.income}`", "notify(`${payout.name} income +$${income}`");
+
+source = replaceOnce(source,
+  "  visualOverhaul = new GraphicsOverhaul({ scene, camera, renderer, quality: state.quality, random, testMode: !!globalThis.__NEON_BAY_TEST__ }).build();\n  cinematicCity = new CinematicCityOverhaul({ scene, camera, renderer, quality: state.quality, random, testMode: !!globalThis.__NEON_BAY_TEST__ }).build();",
+  "  visualOverhaul = new GraphicsOverhaul({ scene, camera, renderer, quality: state.quality, random, testMode: !!globalThis.__NEON_BAY_TEST__ }).build();\n  cinematicCity = new CinematicCityOverhaul({ scene, camera, renderer, quality: state.quality, random, testMode: !!globalThis.__NEON_BAY_TEST__ }).build();\n  v17Director = new LivingCityV17({}, { random });\n  v17Director.mountUI(document);",
+  'director creation');
+
+source = replaceOnce(source,
+  "  wantedSearchMarker = buildSearchMarker(); wantedSearchMarker.visible=false;\n  player = createPlayer();",
+  "  wantedSearchMarker = buildSearchMarker(); wantedSearchMarker.visible=false;\n  eventMarker = buildMarker(0xffb24f); eventMarker.visible=false;\n  player = createPlayer();",
+  'event marker');
+
+source = replaceOnce(source,
+  "    const boost = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');\n    const handbrake = input.keys.has('Space');",
+  "    const boostHeld = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');\n    const nitroMax = 100 * (v17Director?.skillEffect('nitroCapacity') 
