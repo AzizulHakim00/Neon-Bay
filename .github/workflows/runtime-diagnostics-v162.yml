@@ -50,9 +50,9 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/index.html >/dev/null; then break; fi
             sleep 0.25
           done
-          node <<'NODE' 2>&1 | tee runtime-diagnostics/browser.log
-          const { chromium } = require('playwright');
-          const fs = require('node:fs');
+          node --input-type=module <<'NODE' 2>&1 | tee runtime-diagnostics/browser.log
+          import { chromium } from 'playwright';
+          import fs from 'node:fs';
 
           const failures = [];
           const consoleLines = [];
