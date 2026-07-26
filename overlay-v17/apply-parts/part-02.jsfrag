@@ -1,0 +1,60 @@
+state.reserve;state.reloading=false;dom.weaponName.textContent=weapon.name;audio.tone(420,.08,'square',.05);},reloadTime);",
+  'reload upgrades');
+
+source = replaceOnce(source,
+  "  state.health=Math.max(0,state.health-remaining);\n  if(state.health<=0)failMission('You were taken down.');",
+  "  state.health=Math.max(0,state.health-remaining);\n  v17Director?.recordDamage(remaining);\n  if(state.health<=0){v17Director?.recordDeath();failMission('You were taken down.');}",
+  'adaptive damage');
+
+source = replaceOnce(source,
+  "  dom.wanted.textContent=Array.from({length:3},(_,i)=>i<state.wanted?'★':'☆').join(' ');\n  if(dom.wantedStatus)dom.wantedStatus.textContent=wantedProfile(state.wanted).label;",
+  "  dom.wanted.textContent=Array.from({length:5},(_,i)=>i<state.wanted?'★':'☆').join(' ');\n  if(dom.wantedStatus)dom.wantedStatus.textContent=v17WantedProfile(state.wanted).label;",
+  'five star HUD');
+
+source = replaceOnce(source,
+  "  dom.weather.textContent=state.weather;if(dom.radioStation)dom.radioStation.textContent=(RADIO_STATIONS[state.radioStation]||RADIO_STATIONS[0]).name;if(state.phoneOpen)updatePhone();",
+  "  dom.weather.textContent=state.weather;if(dom.radioStation)dom.radioStation.textContent=(RADIO_STATIONS[state.radioStation]||RADIO_STATIONS[0]).name;if(state.phoneOpen)updatePhone();\n  v17Director?.updateUI({activeVehicle:state.activeVehicle,nitro:state.nitro,eventProgress:state.eventKills,eventTime:state.eventTime});",
+  'v17 HUD');
+
+const saveStart = source.indexOf('function saveGame(silent=false) {');
+const saveEnd = source.indexOf('\nfunction beginPlay()', saveStart);
+if (saveStart < 0 || saveEnd < 0) throw new Error('v1.7 save block missing');
+const saveBlock = `function slotKey(slot=state.saveSlot){return \`${'${CONFIG.saveKeyPrefix}${clamp(Number(slot)||1,1,3)}'}\`;}
+function backupKey(slot=state.saveSlot){return \`${'${CONFIG.backupKeyPrefix}${clamp(Number(slot)||1,1,3)}'}\`;}
+function hasAnySave(){return [1,2,3].some(slot=>localStorage.getItem(slotKey(slot)))||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderLegacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey);}
+function setSaveSlot(slot){state.saveSlot=clamp(Number(slot)||1,1,3);localStorage.setItem(CONFIG.saveIndexKey,String(state.saveSlot));document.querySelectorAll('#v17-save-slot').forEach(select=>select.value=String(state.saveSlot));dom.continueBtn.disabled=!hasAnySave();if(state.running||state.paused)notify(\`Save slot ${'${state.saveSlot}'} selected.\`,1.4);}
+
+function saveGame(silent=false) {
+  if(!player)return;
+  state.weaponData[state.weapon].ammo=state.ammo;state.weaponData[state.weapon].reserve=state.reserve;
+  const p=getPlayerPosition();
+  const data={version:5,saveSlot:state.saveSlot,currentMission:state.currentMission,missionStep:state.missionStep,cash:state.cash,health:state.health,armor:state.armor,weapon:state.weapon,weaponData:state.weaponData,ownedWeapons:{...state.ownedWeapons},timeOfDay:state.timeOfDay,position:{x:p.x,z:p.z},chapterComplete:state.chapterComplete,storyComplete:state.storyComplete,firstRideCinematicSeen:state.firstRideCinematicSeen,progression:progression.serialize(),businessEmpire:businessEmpire.serialize(),vehicleUpgrades:{...state.vehicleUpgrades},territoryControl:{...state.territoryControl},radioStation:state.radioStation,outfitIndex:state.outfitIndex,nitro:state.nitro,v17:v17Director?.serialize()};
+  const key=slotKey();const existing=localStorage.getItem(key);if(existing)localStorage.setItem(backupKey(),existing);localStorage.setItem(key,JSON.stringify(data));localStorage.setItem(CONFIG.saveIndexKey,String(state.saveSlot));dom.continueBtn.disabled=false;if(!silent)notify(\`Game saved to slot ${'${state.saveSlot}'} .\`.replace(' .','.'),1.5);
+}
+
+function loadGame(slot=state.saveSlot,allowBackup=true) {
+  state.saveSlot=clamp(Number(slot)||1,1,3);localStorage.setItem(CONFIG.saveIndexKey,String(state.saveSlot));
+  const raw=localStorage.getItem(slotKey())||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderLegacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey);if(!raw)return false;
+  try{
+    const d=JSON.parse(raw);state.cash=d.cash??500;state.health=d.health??100;state.armor=d.armor??25;state.nitro=d.nitro??100;state.timeOfDay=d.timeOfDay??18.3;state.chapterComplete=!!d.chapterComplete;state.storyComplete=!!d.storyComplete;state.firstRideCinematicSeen=d.firstRideCinematicSeen??true;
+    progression=new ProgressionSystem(d.progression||{});businessEmpire=new BusinessEmpire(d.businessEmpire||{});v17Director?.hydrate(d.v17||{});state.vehicleUpgrades={engine:0,brakes:0,grip:0,...d.vehicleUpgrades};state.ownedWeapons={pistol:true,shotgun:true,smg:false,...d.ownedWeapons};state.territoryControl={...state.territoryControl,...d.territoryControl};state.radioStation=d.radioStation||0;state.outfitIndex=d.outfitIndex||0;
+    const defaultWeapons={pistol:{ammo:d.ammo??12,reserve:d.reserve??72,mag:12},shotgun:{ammo:6,reserve:24,mag:6},smg:{ammo:30,reserve:90,mag:30}};state.weaponData={...defaultWeapons,...(d.weaponData||{})};state.weapon=d.weapon||'pistol';if(!state.ownedWeapons[state.weapon])state.weapon='pistol';state.ammo=state.weaponData[state.weapon].ammo;state.reserve=state.weaponData[state.weapon].reserve;
+    startMission(d.currentMission??0,false);player.position.set(d.position?.x??MISSIONS[state.currentMission].start.x,0,d.position?.z??MISSIONS[state.currentMission].start.z);playerActor?.setWeapon(state.weapon);applyOutfit(state.outfitIndex);
+    localStorage.removeItem(CONFIG.legacySaveKey);localStorage.removeItem(CONFIG.olderLegacySaveKey);localStorage.removeItem(CONFIG.olderSaveKey);localStorage.removeItem(CONFIG.oldestSaveKey);audio.setRadio(state.radioStation,false);saveGame(true);return true;
+  }catch(error){const backup=allowBackup?localStorage.getItem(backupKey()):null;if(backup){localStorage.setItem(slotKey(),backup);notify('Recovered the previous save backup.',2.4);return loadGame(state.saveSlot,false);}console.warn('Save load failed',error);return false;}
+}
+
+function newGame() {
+  localStorage.removeItem(slotKey());localStorage.removeItem(backupKey());
+  Object.assign(state,{health:100,armor:25,stamina:100,cash:850,weapon:'pistol',ammo:12,reserve:72,weaponData:{pistol:{ammo:12,reserve:72,mag:12},shotgun:{ammo:6,reserve:24,mag:6},smg:{ammo:30,reserve:90,mag:30}},ownedWeapons:{pistol:true,shotgun:true,smg:false},wanted:0,wantedHeat:0,nitro:100,eventKills:0,eventTime:0,timeOfDay:18.3,weather:'CLEAR',chapterComplete:false,storyComplete:false,gameOver:false,currentInterior:null,firstRideCinematicSeen:false,activeActivity:null,vehicleUpgrades:{engine:0,brakes:0,grip:0},radioStation:0,territoryControl:{'ocean-drive':35,'vice-point':20,harbor:15,downtown:10,'little-bay':45},outfitIndex:0});
+  progression=new ProgressionSystem();businessEmpire=new BusinessEmpire();v17Director?.hydrate({});audio.setRadio(0,false);applyOutfit(0);playerActor?.setWeapon('pistol');startMission(0,true);beginPlay();
+}
+`;
+source = source.slice(0, saveStart) + saveBlock + source.slice(saveEnd);
+
+source = source.replaceAll("localStorage.getItem(CONFIG.saveKey)||", "hasAnySave()||");
+source = source.replaceAll("dom.continueBtn.disabled=!(hasAnySave()||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey));", "dom.continueBtn.disabled=!hasAnySave();");
+source = source.replaceAll("dom.continueBtn.disabled=!(localStorage.getItem(CONFIG.saveKey)||localStorage.getItem(CONFIG.legacySaveKey)||localStorage.getItem(CONFIG.olderSaveKey)||localStorage.getItem(CONFIG.oldestSaveKey));", "dom.continueBtn.disabled=!hasAnySave();");
+
+source = replaceOnce(source,
+  "  if(dom.s
