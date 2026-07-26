@@ -1,0 +1,172 @@
+name: Neon Bay v1.6.2 runtime diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Build verified static release
+        run: npm run build:hotfix
+
+      - name: Verify packaged release
+        run: |
+          node scripts/package-v161-hotfix.mjs --verify-only dist
+          node scripts/test-v161-recovery.mjs dist
+
+      - name: Install Chromium smoke-test runtime
+        run: |
+          npm install --no-save --no-package-lock playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run rendered browser diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-diagnostics
+          python3 -m http.server 4173 --directory dist >runtime-diagnostics/http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..40}; do
+            if curl -fsS http://127.0.0.1:4173/index.html >/dev/null; then break; fi
+            sleep 0.25
+          done
+          node <<'NODE' 2>&1 | tee runtime-diagnostics/browser.log
+          const { chromium } = require('playwright');
+          const fs = require('node:fs');
+
+          const failures = [];
+          const consoleLines = [];
+          const browser = await chromium.launch({
+            headless: true,
+            args: [
+              '--enable-webgl',
+              '--ignore-gpu-blocklist',
+              '--use-gl=angle',
+              '--use-angle=swiftshader',
+              '--enable-unsafe-swiftshader',
+              '--disable-dev-shm-usage',
+              '--no-sandbox'
+            ]
+          });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+          const page = await context.newPage();
+          page.on('console', msg => {
+            const line = `[console:${msg.type()}] ${msg.text()}`;
+            consoleLines.push(line);
+            console.log(line);
+            if (msg.type() === 'error') failures.push(line);
+          });
+          page.on('pageerror', error => {
+            const line = `[pageerror] ${error.stack || error.message}`;
+            consoleLines.push(line);
+            failures.push(line);
+            console.log(line);
+          });
+          page.on('requestfailed', request => {
+            const line = `[requestfailed] ${request.url()} :: ${request.failure()?.errorText || 'unknown'}`;
+            consoleLines.push(line);
+            failures.push(line);
+            console.log(line);
+          });
+
+          const response = await page.goto('http://127.0.0.1:4173/index.html?diagnostic=1', {
+            waitUntil: 'domcontentloaded',
+            timeout: 30000
+          });
+          if (!response || !response.ok()) failures.push(`index response was ${response?.status() || 'missing'}`);
+
+          const webgl = await page.evaluate(() => {
+            const canvas = document.createElement('canvas');
+            const gl2 = canvas.getContext('webgl2');
+            const gl1 = gl2 || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            return { ok: Boolean(gl1), mode: gl2 ? 'webgl2' : gl1 ? 'webgl1' : 'none' };
+          });
+          console.log('WebGL probe:', webgl);
+          if (!webgl.ok) failures.push('Chromium did not expose a WebGL context');
+
+          await page.waitForTimeout(2500);
+          await page.screenshot({ path: 'runtime-diagnostics/startup.png', fullPage: true });
+
+          const state = await page.evaluate(() => ({
+            loadingActive: document.querySelector('#loading-screen')?.classList.contains('active') || false,
+            menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+            recoveryVisible: document.querySelector('#startup-recovery')?.classList.contains('visible') || false,
+            canvasWidth: document.querySelector('#game-canvas')?.width || 0,
+            canvasHeight: document.querySelector('#game-canvas')?.height || 0,
+            build: document.querySelector('meta[name="neon-bay-build"]')?.content || ''
+          }));
+          console.log('Startup state:', state);
+
+          if (!state.menuActive) {
+            await page.waitForTimeout(12500);
+          }
+          const finalState = await page.evaluate(() => ({
+            loadingActive: document.querySelector('#loading-screen')?.classList.contains('active') || false,
+            menuActive: document.querySelector('#main-menu')?.classList.contains('active') || false,
+            recoveryVisible: document.querySelector('#startup-recovery')?.classList.contains('visible') || false,
+            diagnostics: document.querySelector('#startup-recovery-diagnostics')?.textContent || ''
+          }));
+          console.log('Final startup state:', finalState);
+          await page.screenshot({ path: 'runtime-diagnostics/final.png', fullPage: true });
+
+          if (!finalState.menuActive) failures.push(`Main menu did not activate: ${JSON.stringify(finalState)}`);
+          if (finalState.recoveryVisible) failures.push(`Recovery console became visible: ${finalState.diagnostics}`);
+
+          if (finalState.menuActive) {
+            const howButton = page.locator('#how-btn');
+            await howButton.click();
+            await page.waitForTimeout(200);
+            const howVisible = await page.locator('#how-panel').evaluate(el => !el.classList.contains('hidden'));
+            if (!howVisible) failures.push('How to Play button did not open its modal');
+            await page.locator('#how-panel .close-modal').click();
+
+            const settingsButton = page.locator('#settings-btn');
+            await settingsButton.click();
+            await page.waitForTimeout(200);
+            const settingsVisible = await page.locator('#settings-panel').evaluate(el => !el.classList.contains('hidden'));
+            if (!settingsVisible) failures.push('Settings button did not open its modal');
+            await page.locator('#settings-panel .close-modal').click();
+          }
+
+          fs.writeFileSync('runtime-diagnostics/summary.json', JSON.stringify({ webgl, state, finalState, failures, consoleLines }, null, 2));
+          await browser.close();
+          if (failures.length) {
+            console.error(`Runtime smoke test found ${failures.length} failure(s).`);
+            process.exit(1);
+          }
+          console.log('Runtime smoke test passed.');
+          NODE
+
+      - name: Package checked-out source for analysis
+        if: always()
+        run: |
+          git archive --format=zip --output=runtime-diagnostics/neon-bay-source.zip HEAD
+
+      - name: Upload runtime diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v162-runtime-diagnostics
+          path: runtime-diagnostics/
+          if-no-files-found: error
+          retention-days: 7
