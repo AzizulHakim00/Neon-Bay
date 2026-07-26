@@ -15,9 +15,14 @@ walk(root);
 for (const file of files) {
   let css = fs.readFileSync(file, 'utf8');
   css = css
-    .replace(/@import\s*(?:url\()?\s*["']?https:\/\/fonts\.googleapis\.com[^;)]*(?:\))?["']?\s*;?/gi, '')
+    // Match the complete url(...) statement. Google Fonts URLs contain semicolons,
+    // so stopping at the first semicolon corrupts the generated stylesheet.
+    .replace(/@import\s+url\(\s*(['"])https:\/\/fonts\.googleapis\.com\/[^)]*\1\s*\)\s*;?/gi, '')
+    .replace(/@import\s+(['"])https:\/\/fonts\.googleapis\.com\/.*?\1\s*;?/gi, '')
     .replace(/font-family:\s*Inter\s*,\s*system-ui\s*,\s*sans-serif/gi, 'font-family:Arial,Helvetica,system-ui,sans-serif')
-    .replace(/font-family:\s*["']?Barlow Condensed["']?\s*,\s*sans-serif/gi, 'font-family:"Arial Narrow","Aptos Narrow",Arial,sans-serif');
+    .replace(/font-family:\s*["']?Barlow Condensed["']?\s*,\s*sans-serif/gi, 'font-family:"Arial Narrow","Aptos Narrow",Arial,sans-serif')
+    .replace(/([,\s:])Inter(?=[,;\s}])/g, '$1Arial')
+    .replace(/["']?Barlow Condensed["']?/g, '"Arial Narrow"');
   fs.writeFileSync(file, css, 'utf8');
 }
 
