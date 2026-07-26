@@ -1,0 +1,35 @@
+name: Neon Bay v1.7 Source Audit
+
+on:
+  push:
+    branches:
+      - agent/neon-bay-v1.7-living-city
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run prepare:source
+      - name: Export generated source
+        run: |
+          mkdir -p audit
+          cp -R src audit/src
+          cp index.html package.json vite.config.mjs audit/
+          find audit -maxdepth 3 -type f -print | sort > audit/file-list.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: neon-bay-v17-generated-source
+          path: audit
+          if-no-files-found: error
+          retention-days: 3
