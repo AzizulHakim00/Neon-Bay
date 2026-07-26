@@ -10,6 +10,16 @@ The release takes inspiration from the atmosphere of classic tropical open-world
 - [Standalone static deployment](release-v1.6.1/Neon_Bay_v1.6.1_Standalone_Static.zip)
 - [SHA-256 checksums](release-v1.6.1/Neon_Bay_v1.6.1_SHA256.txt)
 
+## Runtime stability follow-up
+
+The production runtime now also includes fixes verified in a rendered Chromium/WebGL session:
+
+- Fixed malformed production CSS caused by Google Fonts URLs containing semicolons during import removal
+- Replaced the remaining external font declarations with local system-font stacks
+- Fixed repeated Three.js `MultiplyBlending` WebGL errors by enabling premultiplied alpha on cinematic circle materials
+- Added a rendered browser smoke test for WebGL startup, menu layout, settings, New Game, HUD, phone, pause, save-v4 and return-to-menu behavior
+- Automatically republishes `vercel-static/` only after the rendered runtime test succeeds
+
 ## v1.6.1 stable cinematic hotfix
 
 - Replaced runtime fragment fetching, source patching and Blob-module reconstruction with a normal bundled engine entry point
@@ -136,6 +146,8 @@ The v1.6.1 release workflow validates:
 - Safe Graphics and Reset Save recovery behavior
 - Local HTTP `200` responses for the complete static directory
 - Complete-source and standalone-static SHA-256 checksums
+- Rendered Chromium/WebGL startup and gameplay smoke flow
+- Parsed CSS layout, viewport and console-error validation
 
 Vercel serves the committed browser-ready release from `vercel-static/` without installing dependencies or running a remote build.
 
