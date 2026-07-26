@@ -24,6 +24,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run prepare:source
+      - run: npm run test:v17
       - name: Export generated source
         run: |
           mkdir -p audit
