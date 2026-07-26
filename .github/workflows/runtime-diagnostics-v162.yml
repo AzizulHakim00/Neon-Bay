@@ -36,10 +36,14 @@ jobs:
           mkdir -p runtime-diagnostics
           npm run build:release 2>&1 | tee runtime-diagnostics/build.log
       - name: Verify source and packaged release
+        shell: bash
         run: |
-          npm run test:v17
-          node scripts/package-v17-release.mjs --verify-only dist
-          node scripts/test-v17-recovery.mjs dist
+          set -o pipefail
+          {
+            npm run test:v17
+            node scripts/package-v17-release.mjs --verify-only dist
+            node scripts/test-v17-recovery.mjs dist
+          } 2>&1 | tee runtime-diagnostics/verify.log
       - name: Install Chromium
         run: |
           npm install --no-save --no-package-lock playwright@1.55.0
@@ -74,9 +78,15 @@ jobs:
             git commit -m "Publish verified Neon Bay v1.7 static release"
             git push origin HEAD:${{ github.event.pull_request.head.ref }}
           fi
-      - name: Archive source snapshot
+      - name: Archive diagnostics and source snapshot
         if: always()
-        run: git archive --format=zip --output=runtime-diagnostics/neon-bay-v17-source.zip HEAD
+        shell: bash
+        run: |
+          git archive --format=zip --output=runtime-diagnostics/neon-bay-v17-source.zip HEAD
+          if [[ -d dist ]]; then
+            rm -rf runtime-diagnostics/dist
+            cp -a dist runtime-diagnostics/dist
+          fi
       - name: Upload runtime diagnostics
         if: always()
         uses: actions/upload-artifact@v4
