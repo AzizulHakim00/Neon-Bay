@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - agent/neon-bay-v1.7-living-city
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
