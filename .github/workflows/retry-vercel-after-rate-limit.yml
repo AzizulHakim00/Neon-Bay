@@ -30,6 +30,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Prepare v1.8 packaging tools
+        run: |
+          node scripts/prepare-v17-release-tools.mjs
+          node scripts/prepare-v18-release-tools.mjs
+
       - name: Verify deployable v1.8 static release
         run: |
           node scripts/verify-static-deployment.mjs
