@@ -1,13 +1,13 @@
-name: Verify Neon Bay Vercel static release
+name: Verify Neon Bay v1.8 static release
 
 on:
   pull_request:
     branches: [main]
     paths:
       - 'vercel-static/**'
-      - 'scripts/package-v161-hotfix.mjs'
-      - 'scripts/prepare-v161-packager.mjs'
-      - 'scripts/test-v161-recovery.mjs'
+      - 'scripts/package-v18-release.mjs'
+      - 'scripts/test-v18-recovery.mjs'
+      - 'scripts/verify-static-deployment.mjs'
       - '.github/workflows/verify-vercel-static.yml'
       - 'vercel.json'
   workflow_dispatch:
@@ -18,6 +18,7 @@ permissions:
 jobs:
   verify-static-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out release branch
         uses: actions/checkout@v4
@@ -25,8 +26,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify browser-ready v1.6.1 release
+      - name: Verify browser-ready v1.8 release
         run: |
-          node scripts/prepare-v161-packager.mjs
-          node scripts/package-v161-hotfix.mjs --verify-only vercel-static
-          node scripts/test-v161-recovery.mjs vercel-static
+          node scripts/verify-static-deployment.mjs
+          node scripts/package-v18-release.mjs --verify-only vercel-static
+          node scripts/test-v18-recovery.mjs vercel-static
