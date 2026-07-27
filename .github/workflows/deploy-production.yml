@@ -1,0 +1,42 @@
+name: Deploy Neon Bay production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: neon-bay-production
+  cancel-in-progress: true
+
+jobs:
+  verify-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out verified release
+        uses: actions/checkout@v4
+
+      - name: Verify committed static deployment
+        run: node scripts/verify-static-deployment.mjs
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload production artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: vercel-static
+
+      - name: Deploy production
+        id: deployment
+        uses: actions/deploy-pages@v4
