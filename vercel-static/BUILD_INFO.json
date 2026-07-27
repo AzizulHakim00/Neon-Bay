@@ -1,10 +1,10 @@
 {
   "name": "Neon Bay",
-  "version": "1.7.0",
-  "release": "Living City",
+  "version": "1.8.0",
+  "release": "Empire Expansion",
   "generatedAt": "2026-07-26T00:00:00.000Z",
   "deployment": "self-contained static Vite bundle",
-  "saveSchema": "v5-multislot",
+  "saveSchema": "v6-multislot-empire",
   "recovery": [
     "automatic safe graphics retry",
     "manual safe graphics",

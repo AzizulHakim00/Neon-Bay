@@ -1,4 +1,4 @@
-import{U as o,o as n,p as r,q as s,L as l,r as p,s as g,t as f,u as _,v as u,w as h}from"./neon-bay-v1.7.0-engine.CNbk1pvv.js";import{P as M,F as m}from"./neon-bay-v1.7.0-Pass.Bm9CkgIe.js";const i={name:"OutputShader",uniforms:{tDiffuse:{value:null},toneMappingExposure:{value:1}},vertexShader:`
+import{U as o,o as n,p as r,q as s,L as l,r as p,s as g,t as f,u as _,v as u,w as h}from"./neon-bay-v1.8.0-engine.DBvEijO7.js";import{P as M,F as m}from"./neon-bay-v1.8.0-Pass.DRZUYk2C.js";const i={name:"OutputShader",uniforms:{tDiffuse:{value:null},toneMappingExposure:{value:1}},vertexShader:`
 		precision highp float;
 
 		uniform mat4 modelViewMatrix;

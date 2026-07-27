@@ -1,4 +1,4 @@
-name: Neon Bay v1.7 release diagnostics
+name: Neon Bay v1.8 release diagnostics
 
 on:
   pull_request:
@@ -9,13 +9,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: neon-bay-v17-${{ github.event.pull_request.number || github.ref }}
+  group: neon-bay-v18-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   release-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Check out source branch
         uses: actions/checkout@v4
@@ -29,20 +29,20 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
-      - name: Build v1.7 release
+      - name: Build v1.8 release
         shell: bash
         run: |
           set -o pipefail
           mkdir -p runtime-diagnostics
           npm run build:release 2>&1 | tee runtime-diagnostics/build.log
-      - name: Verify source and packaged release
+      - name: Verify source, compatibility, package and recovery
         shell: bash
         run: |
           set -o pipefail
           {
-            npm run test:v17
-            node scripts/package-v17-release.mjs --verify-only dist
-            node scripts/test-v17-recovery.mjs dist
+            npm run test:v18
+            node scripts/package-v18-release.mjs --verify-only dist
+            node scripts/test-v18-recovery.mjs dist
           } 2>&1 | tee runtime-diagnostics/verify.log
       - name: Install Chromium
         run: |
@@ -60,29 +60,29 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/index.html >/dev/null; then break; fi
             sleep 0.25
           done
-          node scripts/runtime-v17-smoke.mjs 2>&1 | tee runtime-diagnostics/browser.log
-      - name: Publish verified static directory
+          node scripts/runtime-v18-smoke.mjs 2>&1 | tee runtime-diagnostics/browser.log
+      - name: Publish verified v1.8 static directory
         if: success() && github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
         shell: bash
         run: |
           rm -rf vercel-static
           mkdir -p vercel-static
           cp -a dist/. vercel-static/
-          npm run verify:v17
+          npm run verify:v18
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A vercel-static
           if git diff --cached --quiet; then
-            echo "Verified v1.7 static directory is already current."
+            echo "Verified v1.8 static directory is already current."
           else
-            git commit -m "Publish verified Neon Bay v1.7 static release"
+            git commit -m "Publish verified Neon Bay v1.8 static release"
             git push origin HEAD:${{ github.event.pull_request.head.ref }}
           fi
       - name: Archive diagnostics and source snapshot
         if: always()
         shell: bash
         run: |
-          git archive --format=zip --output=runtime-diagnostics/neon-bay-v17-source.zip HEAD
+          git archive --format=zip --output=runtime-diagnostics/neon-bay-v18-source.zip HEAD
           if [[ -d dist ]]; then
             rm -rf runtime-diagnostics/dist
             cp -a dist runtime-diagnostics/dist
@@ -91,7 +91,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: neon-bay-v17-runtime-diagnostics
+          name: neon-bay-v18-runtime-diagnostics
           path: runtime-diagnostics/
           if-no-files-found: error
           retention-days: 7
