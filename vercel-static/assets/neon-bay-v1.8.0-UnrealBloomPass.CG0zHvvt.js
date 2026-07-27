@@ -1,4 +1,4 @@
-import{a as T,V as u,W as d,H as g,U as x,S as f,b as h,A as M,M as S}from"./neon-bay-v1.8.0-engine.DfbEoTLM.js";import{P as C,F as U}from"./neon-bay-v1.8.0-Pass.BMlDXUiu.js";import{C as p}from"./neon-bay-v1.8.0-CopyShader.BzTUYzf6.js";const _={uniforms:{tDiffuse:{value:null},luminosityThreshold:{value:1},smoothWidth:{value:1},defaultColor:{value:new T(0)},defaultOpacity:{value:0}},vertexShader:`
+import{a as T,V as u,W as d,H as g,U as x,S as f,b as h,A as M,M as S}from"./neon-bay-v1.8.0-engine.nIbEkzR9.js";import{P as C,F as U}from"./neon-bay-v1.8.0-Pass.By_YZL8U.js";import{C as p}from"./neon-bay-v1.8.0-CopyShader.BzTUYzf6.js";const _={uniforms:{tDiffuse:{value:null},luminosityThreshold:{value:1},smoothWidth:{value:1},defaultColor:{value:new T(0)},defaultOpacity:{value:0}},vertexShader:`
 
 		varying vec2 vUv;
 

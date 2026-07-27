@@ -1,4 +1,4 @@
-import{V as e}from"./neon-bay-v1.8.0-engine.DfbEoTLM.js";const t={name:"FXAAShader",uniforms:{tDiffuse:{value:null},resolution:{value:new e(1/1024,1/512)}},vertexShader:`
+import{V as e}from"./neon-bay-v1.8.0-engine.nIbEkzR9.js";const t={name:"FXAAShader",uniforms:{tDiffuse:{value:null},resolution:{value:new e(1/1024,1/512)}},vertexShader:`
 
 		varying vec2 vUv;
 
