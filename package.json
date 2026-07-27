@@ -7,7 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
-    "prepare:source": "node scripts/prepare-v17-release-tools.mjs && node scripts/fix-v17-validator.mjs && node scripts/apply-v13-clean.mjs && node scripts/refresh-v14-manifest.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-flexible.mjs && node scripts/fix-v162-runtime.mjs && node scripts/apply-v17.mjs && node scripts/prepare-v18-release-tools.mjs && node scripts/fix-v18-environment.mjs && node scripts/apply-v18.mjs && node scripts/apply-v18-performance-hotfix.mjs && node scripts/apply-v181.mjs && node scripts/apply-v182.mjs",
+    "prepare:source": "node scripts/prepare-v17-release-tools.mjs && node scripts/fix-v17-validator.mjs && node scripts/apply-v13-clean.mjs && node scripts/refresh-v14-manifest.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-flexible.mjs && node scripts/fix-v162-runtime.mjs && node scripts/apply-v17.mjs && node scripts/prepare-v18-release-tools.mjs && node scripts/fix-v18-environment.mjs && node scripts/apply-v18.mjs && node scripts/apply-v18-performance-hotfix.mjs && node scripts/apply-v181.mjs && node scripts/apply-v182.mjs && node scripts/apply-v182-contract-ui-fix.mjs",
     "dev": "npm run prepare:source && vite --config vite.config.mjs",
     "build": "npm run prepare:source && vite build --config vite.config.mjs",
     "build:hotfix": "npm run build:release",
