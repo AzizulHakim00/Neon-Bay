@@ -1,3 +1,4 @@
-Neon Bay v1.4 production redeploy trigger
-Requested: 2026-07-21 Asia/Dhaka
-Source release: 8219abfbee9832cecf5c8c19848efec594408956
+Neon Bay v1.8.1 production redeploy trigger
+Requested: 2026-07-27 Asia/Dhaka
+Source release: bcde251435fcaeb7f1c3016484c9bac9c349021d
+Reason: deploy verified playability, camera, pointer-lock and visual-quality hotfix
