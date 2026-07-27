@@ -2,7 +2,7 @@
   "name": "Neon Bay",
   "version": "1.6.1",
   "release": "Stable Cinematic Hotfix",
-  "generatedAt": "2026-07-27T10:32:55.204Z",
+  "generatedAt": "2026-07-27T10:34:02.592Z",
   "deployment": "self-contained static Vite bundle",
   "saveSchema": "v4",
   "recovery": [
