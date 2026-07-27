@@ -9,6 +9,7 @@ const requiredFiles = [
   'scripts/apply-v18-performance-hotfix.mjs',
   'scripts/apply-v181.mjs',
   'scripts/apply-v182.mjs',
+  'scripts/apply-v182-contract-ui-fix.mjs',
   'scripts/prepare-v18-release-tools.mjs',
   'scripts/test-v18.mjs',
   'scripts/test-v18-performance-hotfix.mjs',
@@ -27,8 +28,9 @@ if (pkg.version !== '1.8.2') throw new Error(`Expected package version 1.8.2, fo
 if (!pkg.scripts?.['test:v18'] || !pkg.scripts?.['verify:v18']) throw new Error('v1.8 test/verify scripts are not wired.');
 if (!pkg.scripts['prepare:source'].includes('apply-v18-performance-hotfix.mjs')) throw new Error('Performance hotfix is not wired into source preparation.');
 if (!pkg.scripts['prepare:source'].includes('apply-v182.mjs')) throw new Error('v1.8.2 playability patch is not wired into source preparation.');
+if (!pkg.scripts['prepare:source'].includes('apply-v182-contract-ui-fix.mjs')) throw new Error('v1.8.2 contract HUD fix is not wired into source preparation.');
 if (!pkg.scripts['test:v18'].includes('test-v18-performance-hotfix.mjs')) throw new Error('Performance regression test is not wired.');
 if (!pkg.scripts['test:v18'].includes('test-v182-playability.mjs')) throw new Error('v1.8.2 regression test is not wired.');
 const vite = fs.readFileSync(path.join(root, 'vite.config.mjs'), 'utf8');
 if (!vite.includes('neon-bay-v1.8.0-engine')) throw new Error('v1.8 cache-busted assets are not configured.');
-console.log(JSON.stringify({ release:'Neon Bay v1.8.2 Playability & Performance', files:requiredFiles.length, packageVersion:pkg.version, performanceHotfix:true, playabilityPatch:true, status:'ready' }, null, 2));
+console.log(JSON.stringify({ release:'Neon Bay v1.8.2 Playability & Performance', files:requiredFiles.length, packageVersion:pkg.version, performanceHotfix:true, playabilityPatch:true, contractHudFix:true, status:'ready' }, null, 2));
