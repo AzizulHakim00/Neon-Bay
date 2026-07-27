@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#080b19" />
     <meta name="description" content="Neon Bay — an original browser-based open-city action game." />
     <link rel="icon" href="./favicon.svg" />
-    <title>Neon Bay v1.7.0</title>
+    <title>Neon Bay v1.8.0</title>
     
-<script id="neon-bay-v17-recovery">
+<script id="neon-bay-v18-recovery">
 (() => {
   'use strict';
-  const VERSION = "1.7.0";
-  const BUILD = "Living City";
+  const VERSION = "1.8.0";
+  const BUILD = "Empire Expansion";
   const QUALITY_KEY = 'neon-bay-quality';
-  const SAVE_KEYS = ["neon-bay-save-v5-index","neon-bay-save-v5-slot-1","neon-bay-save-v5-slot-2","neon-bay-save-v5-slot-3","neon-bay-save-v5-backup-1","neon-bay-save-v5-backup-2","neon-bay-save-v5-backup-3","neon-bay-save-v4","neon-bay-save-v3","neon-bay-save-v2","neon-bay-save-v1"];
-  const ATTEMPT_KEY = 'neon-bay-v17-auto-safe-attempt';
+  const SAVE_KEYS = ["neon-bay-save-v6-index","neon-bay-save-v6-slot-1","neon-bay-save-v6-slot-2","neon-bay-save-v6-slot-3","neon-bay-save-v6-backup-1","neon-bay-save-v6-backup-2","neon-bay-save-v6-backup-3","neon-bay-save-v5-index","neon-bay-save-v5-slot-1","neon-bay-save-v5-slot-2","neon-bay-save-v5-slot-3","neon-bay-save-v5-backup-1","neon-bay-save-v5-backup-2","neon-bay-save-v5-backup-3","neon-bay-save-v4","neon-bay-save-v3","neon-bay-save-v2","neon-bay-save-v1"];
+  const ATTEMPT_KEY = 'neon-bay-v18-auto-safe-attempt';
   const params = new URLSearchParams(location.search);
   const boot = { error: '', resource: '', started: Date.now(), timer: 0 };
 
@@ -151,11 +151,11 @@
   });
 })();
 </script>
-<script type="module" crossorigin src="./assets/neon-bay-v1.7.0-engine.CNbk1pvv.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/neon-bay-v1.7.0-styles.BjFY9IGb.css">
-    <meta name="neon-bay-build" content="v1.7.0 Living City" />
+<script type="module" crossorigin src="./assets/neon-bay-v1.8.0-engine.DBvEijO7.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/neon-bay-v1.8.0-styles.xcEEfK6k.css">
+    <meta name="neon-bay-build" content="v1.8.0 Empire Expansion" />
 
-<style id="neon-bay-v17-recovery-style">
+<style id="neon-bay-v18-recovery-style">
 #startup-recovery{position:fixed;inset:0;z-index:10000;display:none;place-items:center;padding:24px;background:radial-gradient(circle at 50% 12%,rgba(27,55,104,.96),rgba(3,5,16,.985) 58%);color:#fff;font-family:Arial,Helvetica,system-ui,sans-serif}
 #startup-recovery.visible{display:grid}
 #startup-recovery .recovery-card{width:min(720px,100%);border:1px solid rgba(56,232,255,.34);border-radius:22px;padding:28px;background:rgba(4,8,24,.94);box-shadow:0 28px 90px rgba(0,0,0,.58),0 0 48px rgba(56,232,255,.12)}
@@ -176,9 +176,9 @@
 
       <div id="loading-screen" class="screen active">
         <div class="loading-card">
-          <div class="eyebrow">ORIGINAL WEB GAME · v1.7</div>
+          <div class="eyebrow">ORIGINAL WEB GAME · v1.8</div>
           <h1>NEON <span>BAY</span></h1>
-          <p>Starting Living City…</p>
+          <p>Starting Empire Expansion…</p>
           <div class="loader"><i></i></div>
         </div>
       </div>
@@ -367,7 +367,7 @@
   
 <div id="startup-recovery" role="alertdialog" aria-modal="true" aria-labelledby="startup-recovery-title">
   <div class="recovery-card">
-    <div class="recovery-eyebrow">NEON BAY v1.7.0 · RECOVERY CONSOLE</div>
+    <div class="recovery-eyebrow">NEON BAY v1.8.0 · RECOVERY CONSOLE</div>
     <h2 id="startup-recovery-title">The city could not start normally.</h2>
     <p id="startup-recovery-status">A safe recovery option is available.</p>
     <pre id="startup-recovery-diagnostics">Collecting diagnostics…</pre>
@@ -376,7 +376,7 @@
       <button id="recovery-retry" type="button">Retry Startup</button>
       <button id="recovery-reset" class="danger" type="button">Reset Save and Retry</button>
     </div>
-    <div class="recovery-note">Safe Graphics changes only the graphics preset. Reset Save permanently removes local save-v1 through save-v5 slot and backup data from this browser.</div>
+    <div class="recovery-note">Safe Graphics changes only the graphics preset. Reset Save permanently removes local save-v1 through save-v6 slot and backup data from this browser.</div>
   </div>
 </div>
 </body>
