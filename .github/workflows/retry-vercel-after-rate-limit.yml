@@ -1,4 +1,4 @@
-name: Verify and retry Vercel until production succeeds
+name: Verify and retry Neon Bay v1.8 Vercel production
 
 on:
   schedule:
@@ -16,6 +16,7 @@ concurrency:
 jobs:
   retry-production:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out latest main
         uses: actions/checkout@v4
@@ -29,8 +30,11 @@ jobs:
         with:
           node-version: 22
 
-      - name: Verify the deployable v1.5 static release
-        run: node scripts/verify-vercel-static.mjs vercel-static
+      - name: Verify deployable v1.8 static release
+        run: |
+          node scripts/verify-static-deployment.mjs
+          node scripts/package-v18-release.mjs --verify-only vercel-static
+          node scripts/test-v18-recovery.mjs vercel-static
 
       - name: Inspect latest Vercel status
         id: vercel
@@ -55,14 +59,14 @@ jobs:
           retry=false
           case "$state" in
             success)
-              echo "Production deployment succeeded. No new deployment commit will be created."
+              echo "Vercel v1.8 deployment succeeded."
               ;;
             pending)
-              echo "A Vercel deployment is already running. Waiting for the next scheduled check."
+              echo "A Vercel deployment is already running."
               ;;
             failure)
               retry=true
-              echo "Vercel rejected or failed the latest deployment. Triggering a fresh verified static deployment."
+              echo "Vercel failed the verified v1.8 deployment; requesting a retry."
               ;;
             missing)
               commit_time="$(git show -s --format=%ct HEAD)"
@@ -70,25 +74,25 @@ jobs:
               age="$((now - commit_time))"
               if (( age >= 1200 )); then
                 retry=true
-                echo "No Vercel status appeared after 20 minutes. Triggering a fresh verified static deployment."
+                echo "No Vercel status appeared after 20 minutes; requesting a retry."
               else
-                echo "The commit is recent; waiting for Vercel to attach its status."
+                echo "The main commit is recent; allowing Vercel more time."
               fi
               ;;
             *)
               retry=true
-              echo "Unknown Vercel status. Triggering a fresh verified static deployment."
+              echo "Unknown Vercel status; requesting a retry."
               ;;
           esac
 
           echo "retry=${retry}" >> "$GITHUB_OUTPUT"
 
-      - name: Trigger a fresh Vercel Git deployment
+      - name: Trigger fresh verified v1.8 Vercel deployment
         if: steps.vercel.outputs.retry == 'true'
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "neon-bay-deploy-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit --allow-empty -m "chore: retry verified Neon Bay v1.5 Vercel deployment"
+          git commit --allow-empty -m "chore: retry verified Neon Bay v1.8 Vercel deployment"
           git push origin HEAD:main
