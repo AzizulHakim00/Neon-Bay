@@ -1,13 +1,13 @@
 {
   "name": "neon-bay",
   "private": true,
-  "version": "1.7.0",
+  "version": "1.8.0",
   "type": "module",
   "engines": {
     "node": "22.x"
   },
   "scripts": {
-    "prepare:source": "node scripts/prepare-v17-release-tools.mjs && node scripts/fix-v17-validator.mjs && node scripts/apply-v13-clean.mjs && node scripts/refresh-v14-manifest.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-flexible.mjs && node scripts/fix-v162-runtime.mjs && node scripts/apply-v17.mjs",
+    "prepare:source": "node scripts/prepare-v17-release-tools.mjs && node scripts/fix-v17-validator.mjs && node scripts/apply-v13-clean.mjs && node scripts/refresh-v14-manifest.mjs && node scripts/apply-v14-overlay.mjs && node scripts/apply-v15-overlay.mjs && node scripts/apply-v16-flexible.mjs && node scripts/fix-v162-runtime.mjs && node scripts/apply-v17.mjs && node scripts/prepare-v18-release-tools.mjs && node scripts/apply-v18.mjs",
     "dev": "npm run prepare:source && vite --config vite.config.mjs",
     "build": "npm run prepare:source && vite build --config vite.config.mjs",
     "build:hotfix": "npm run build:release",
@@ -15,8 +15,10 @@
     "verify:v161": "node scripts/prepare-v161-packager.mjs && node scripts/package-v161-hotfix.mjs --verify-only vercel-static",
     "test:cinematic": "node scripts/cinematic-city-v16-test.mjs",
     "test:v17": "node scripts/test-v17.mjs",
-    "build:release": "npm run build && node scripts/strip-external-fonts.mjs dist && node scripts/package-v17-release.mjs dist && node scripts/normalize-v161-build-info.mjs dist",
-    "verify:v17": "node scripts/package-v17-release.mjs --verify-only vercel-static && node scripts/test-v17-recovery.mjs vercel-static"
+    "test:v18": "node scripts/test-v18.mjs",
+    "build:release": "npm run build && node scripts/strip-external-fonts.mjs dist && node scripts/package-v18-release.mjs dist && node scripts/normalize-v161-build-info.mjs dist",
+    "verify:v17": "node scripts/package-v17-release.mjs --verify-only vercel-static && node scripts/test-v17-recovery.mjs vercel-static",
+    "verify:v18": "node scripts/package-v18-release.mjs --verify-only vercel-static && node scripts/test-v18-recovery.mjs vercel-static"
   },
   "dependencies": {
     "three": "^0.179.1"
