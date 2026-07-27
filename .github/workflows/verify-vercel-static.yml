@@ -6,6 +6,7 @@ on:
     paths:
       - 'vercel-static/**'
       - 'scripts/prepare-v17-release-tools.mjs'
+      - 'scripts/fix-v17-validator.mjs'
       - 'scripts/prepare-v18-release-tools.mjs'
       - 'scripts/test-v18-recovery.mjs'
       - 'scripts/verify-static-deployment.mjs'
@@ -30,6 +31,7 @@ jobs:
       - name: Prepare v1.8 packaging tools
         run: |
           node scripts/prepare-v17-release-tools.mjs
+          node scripts/fix-v17-validator.mjs
           node scripts/prepare-v18-release-tools.mjs
       - name: Verify browser-ready v1.8 release
         run: |
