@@ -5,7 +5,8 @@ on:
     branches: [main]
     paths:
       - 'vercel-static/**'
-      - 'scripts/package-v18-release.mjs'
+      - 'scripts/prepare-v17-release-tools.mjs'
+      - 'scripts/prepare-v18-release-tools.mjs'
       - 'scripts/test-v18-recovery.mjs'
       - 'scripts/verify-static-deployment.mjs'
       - '.github/workflows/verify-vercel-static.yml'
@@ -26,6 +27,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Prepare v1.8 packaging tools
+        run: |
+          node scripts/prepare-v17-release-tools.mjs
+          node scripts/prepare-v18-release-tools.mjs
       - name: Verify browser-ready v1.8 release
         run: |
           node scripts/verify-static-deployment.mjs
