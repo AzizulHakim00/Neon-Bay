@@ -33,6 +33,7 @@ jobs:
       - name: Prepare v1.8 packaging tools
         run: |
           node scripts/prepare-v17-release-tools.mjs
+          node scripts/fix-v17-validator.mjs
           node scripts/prepare-v18-release-tools.mjs
 
       - name: Verify committed production files
