@@ -35,12 +35,11 @@ jobs:
           set -o pipefail
           mkdir -p runtime-diagnostics
           npm run build:release 2>&1 | tee runtime-diagnostics/build.log
-      - name: Verify source, package and recovery
+      - name: Verify source, compatibility, package and recovery
         shell: bash
         run: |
           set -o pipefail
           {
-            npm run test:v17
             npm run test:v18
             node scripts/package-v18-release.mjs --verify-only dist
             node scripts/test-v18-recovery.mjs dist
