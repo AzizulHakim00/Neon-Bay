@@ -1,4 +1,4 @@
-name: Deploy Neon Bay v1.8 to GitHub Pages
+name: Verify Neon Bay v1.8 and optionally deploy to GitHub Pages
 
 on:
   push:
@@ -43,15 +43,16 @@ jobs:
           node scripts/test-v18-recovery.mjs vercel-static
 
       - name: Configure GitHub Pages
+        if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload v1.8 production artifact
+        if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: vercel-static
 
       - name: Deploy v1.8 production
+        if: ${{ vars.ENABLE_GITHUB_PAGES == 'true' }}
         id: deployment
         uses: actions/deploy-pages@v4
